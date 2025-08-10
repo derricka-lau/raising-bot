@@ -1,0 +1,10 @@
+config.py
+session_name.session
+*.csv
+processed_signals.txt
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+build/
+dist/
