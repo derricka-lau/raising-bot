@@ -38,7 +38,7 @@ Automated SPX Bull Spread Order Management for Interactive Brokers (IBKR)
 
 3. **Install dependencies:**
    ```sh
-   python3 -m pip install -r requirements.txt --break-system-packages
+   python3 -m pip install -r requirements.txt
    ```
 
 4. **Configure your settings:**
