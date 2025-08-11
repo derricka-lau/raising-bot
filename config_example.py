@@ -13,6 +13,7 @@ UNDERLYING_SYMBOL = "SPX"
 DEFAULT_ORDER_TYPE = "SNAP MID"
 DEFAULT_LIMIT_PRICE = None
 DEFAULT_STOP_PRICE = None
+SNAPMID_OFFSET = 0.5  # Default offset for SNAP MID orders
 
 # # --- Telegram Credentials (OPTIONAL - Tier 1) ---
 # TELEGRAM_API_ID = 'YOUR_API_ID'

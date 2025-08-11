@@ -7,7 +7,7 @@ import pytz
 import tkinter as tk
 
 from config import (IBKR_HOST, IBKR_PORT, IBKR_CLIENT_ID, 
-                    UNDERLYING_SYMBOL, IBKR_ACCOUNT)
+                    UNDERLYING_SYMBOL, IBKR_ACCOUNT, SNAPMID_OFFSET)
 from signal_utils import (get_signal_from_telegram, parse_multi_signal_message, 
                           get_signals_from_csv, get_signal_interactively, 
                           get_signal_hash, already_processed, record_processed)
@@ -96,14 +96,18 @@ def main():
         order = Order()
         order.action = "BUY"
         order.totalQuantity = 1
-        order.tif = "GTC"
+        order.tif = "DAY"
         order.transmit = False
         order.orderType = signal_data['order_type']
         order.account = IBKR_ACCOUNT  # <-- Add this line
-        if order.orderType == 'LMT': order.lmtPrice = signal_data['lmt_price']
-        elif order.orderType == 'STP': order.auxPrice = signal_data['stop_price']
-        elif order.orderType == 'STP LMT': order.lmtPrice = signal_data['lmt_price']; order.auxPrice = signal_data['stop_price']
-        elif order.orderType == 'SNAP MID': order.auxPrice = 0.0
+        if order.orderType == 'LMT': 
+            order.lmtPrice = signal_data['lmt_price']
+        elif order.orderType == 'STP': 
+            order.auxPrice = signal_data['stop_price']
+        elif order.orderType == 'STP LMT': 
+            order.lmtPrice = signal_data['lmt_price']; order.auxPrice = signal_data['stop_price']
+        elif order.orderType == 'SNAP MID':
+            order.auxPrice = signal_data.get('snapmid_offset', SNAPMID_OFFSET)
         condition = Create(OrderCondition.Price)
         condition.conId = trigger_conid
         condition.exchange = 'CBOE'
@@ -113,9 +117,8 @@ def main():
         order.conditions.append(condition)
         order.eTradeOnly = False
         order.firmQuoteOnly = False
-        # DO NOT place the order here. This causes the "Duplicate order id" error.
-        # We will place it only once after the market open check.
-        # app.placeOrder(orderId, combo_contract, order)
+
+        app.placeOrder(orderId, combo_contract, order)
         managed_orders.append({"id": orderId, "trigger": float(signal_data['trigger_price']), "contract": combo_contract, "order_obj": order, "hash": signal_hash})
         print(f"--> Staged Order {orderId} for {UNDERLYING_SYMBOL} ({order.orderType}) with trigger at {signal_data['trigger_price']} for review.")
         # Fetch and display open orders from IBKR
