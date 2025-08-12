@@ -17,17 +17,23 @@ from ibapi.contract import ComboLeg, Contract
 from ibapi.order import Order
 from ibapi.order_condition import Create, OrderCondition
 
-def get_next_trading_day_open(tz):
+def get_trading_day_open(tz, choice='next'):
+    """
+    Calculates the market open time for 'today' or the 'next' trading day.
+    """
     now = datetime.now(tz)
-    # Start from tomorrow if current time is past market open
-    if now.hour > 9 or (now.hour == 9 and now.minute >= 30):
-        next_day = now + timedelta(days=1)
-    else:
-        next_day = now
-    # Find the next weekday (Mon-Fri)
-    while next_day.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
-        next_day += timedelta(days=1)
-    return next_day.replace(hour=9, minute=30, second=0, microsecond=0)
+    target_day = now
+
+    if choice == 'next':
+        # Always start from the next calendar day
+        target_day = now + timedelta(days=1)
+    
+    # For 'next' choice, find the next weekday if the target is a weekend.
+    # For 'today' choice, this loop won't run if today is a weekday.
+    while target_day.weekday() >= 5:  # 5 = Saturday, 6 = Sunday
+        target_day += timedelta(days=1)
+        
+    return target_day.replace(hour=9, minute=30, second=0, microsecond=0)
 
 def main():
     app = IBKRApp()
@@ -127,10 +133,22 @@ def main():
 
     # Always use US/Eastern time for market open
     tz = pytz.timezone('US/Eastern')
-    next_open = get_next_trading_day_open(tz)
-    print(f"Next US market open: {next_open.strftime('%Y-%m-%d %H:%M:%S %Z')}")
-    print(f"\nStaged {len(managed_orders)} order(s). Waiting for next US market open at {next_open.strftime('%Y-%m-%d %H:%M:%S %Z')}...")
-    while datetime.now(tz) < next_open:
+
+    # User chooses when to run the check
+    day_selection = ''
+    while day_selection not in ['today', 'next']:
+        user_input = input("\nWhen should the GO/NO-GO check run? [1] Today's Open [2] Next Trading Day's Open: ")
+        if user_input == '1':
+            day_selection = 'today'
+        elif user_input == '2':
+            day_selection = 'next'
+        else:
+            print("Invalid choice. Please enter 1 or 2.")
+
+    market_open_time = get_trading_day_open(tz, day_selection)
+    print(f"Scheduled market open check for: {market_open_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    print(f"\nStaged {len(managed_orders)} order(s). Waiting for market open...")
+    while datetime.now(tz) < market_open_time:
         time.sleep(10)
 
     print(f"\n--- AT-OPEN GO/NO-GO CHECK for {UNDERLYING_SYMBOL} ---")
@@ -139,12 +157,25 @@ def main():
     underlying_contract.secType = "IND"
     underlying_contract.currency = "USD"
     underlying_contract.exchange = "CBOE"
-    app.reqHistoricalData(99, underlying_contract, "", "1 D", "1 day", "TRADES", 1, 1, False, [])
-    time.sleep(3)
+
+    # Interactive retry logic for fetching the open price
+    attempt_count = 0
+    while True:
+        app.underlying_open_price = None  # Reset before request
+        attempt_count += 1
+        print(f"Attempt {attempt_count} to fetch {UNDERLYING_SYMBOL} open price...")
+        app.reqHistoricalData(99, underlying_contract, "", "1 D", "1 day", "TRADES", 1, 1, False, [])
+        time.sleep(5)  # Wait for data to arrive
+
+        if app.underlying_open_price:
+            break  # Success
+
+        retry_choice = input("Failed to fetch open price. Try again? (y/n): ").lower()
+        if retry_choice != 'y':
+            break  # User chose not to retry
+
     if not app.underlying_open_price:
-        print(f"Could not get {UNDERLYING_SYMBOL} open price. Cancelling all staged orders for safety.")
-        for order_info in managed_orders:
-            app.cancelOrder(order_info["id"])
+        print(f"Could not get {UNDERLYING_SYMBOL} open price. Please manually transmit orders.")
         app.disconnect()
         return
 
