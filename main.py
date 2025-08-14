@@ -4,7 +4,8 @@ import threading
 import time
 from datetime import datetime, timedelta
 import pytz
-import tkinter as tk
+import asyncio
+import argparse # 1. Import argparse
 
 from config import (IBKR_HOST, IBKR_PORT, IBKR_CLIENT_ID, 
                     UNDERLYING_SYMBOL, IBKR_ACCOUNT, SNAPMID_OFFSET)
@@ -35,15 +36,61 @@ def get_trading_day_open(tz, choice='next'):
         
     return target_day.replace(hour=9, minute=30, second=0, microsecond=0)
 
+def is_duplicate(signal_leg_conIds, signal_trigger, existing_orders):
+    """
+    Checks if a signal matches any existing open order by comparing leg conIds and trigger price.
+    """
+    for order in existing_orders:
+        if (order.get("secType") == "BAG" and
+            order.get("trigger_price") == signal_trigger and
+            order.get("leg_conIds") == signal_leg_conIds):
+            return True # Found a perfect match
+    return False
+
+async def wait_until_market_open(market_open_time, tz):
+    while True:
+        now = datetime.now(tz)
+        seconds_left = (market_open_time - now).total_seconds()
+        if seconds_left <= 0:
+            break
+        mins, secs = divmod(int(seconds_left), 60)
+        print(f"\rWaiting for market open: {mins:02d}:{secs:02d} remaining...", end="", flush=True)
+        await asyncio.sleep(1)
+    print("\nMarket open reached!")
+
 def main():
+    # 2. Add argument parser at the top of main()
+    parser = argparse.ArgumentParser(description="Automated SPX Bull Spread Order Management for IBKR.")
+    parser.add_argument(
+        '--check-day', 
+        type=str, 
+        choices=['today', 'next'], 
+        default='next', 
+        help="Specify whether to run the GO/NO-GO check at 'today's' or the 'next' trading day's open. Defaults to 'next'."
+    )
+    args = parser.parse_args()
+    day_selection = args.check_day
+
     app = IBKRApp()
     app.connect(IBKR_HOST, IBKR_PORT, IBKR_CLIENT_ID)
     api_thread = threading.Thread(target=app.run, daemon=True)
     api_thread.start()
-    time.sleep(2)
-    app.reqOpenOrders()  # <-- This will log ALL open orders in TWS
-    time.sleep(2)
-    if not app.nextOrderId: print("Failed to connect to IBKR."); return
+
+    # --- Best Practice: Wait for connection using an event ---
+    print("Connecting to IBKR...")
+    connected = app.connected_event.wait(5) # Wait up to 5 seconds
+    if not connected or not app.nextOrderId:
+        print("Failed to connect to IBKR or get next OrderId. Exiting.")
+        return
+
+    print(f"Successfully connected. Next Order ID: {app.nextOrderId}")
+
+    # --- Best Practice: Wait for open orders using an event ---
+    print("Requesting open orders...")
+    app.reqOpenOrders()
+    app.open_orders_event.wait(5) # Wait up to 5 seconds for open orders
+    existing_orders = app.open_orders
+    print(f"Found {len(existing_orders)} open order(s).")
 
     # Fetch the current conId for the SPX Index once
     try:
@@ -84,17 +131,29 @@ def main():
     
     for signal_data in signals_to_process:
         print(f"Processing signal: {signal_data}")
+        
+        # --- Get conIds for the new signal's legs FIRST ---
+        try:
+            lc_conid = app.get_spx_option_conid(signal_data['expiry'], signal_data['lc_strike'], "C")
+            sc_conid = app.get_spx_option_conid(signal_data['expiry'], signal_data['sc_strike'], "C")
+            signal_leg_conIds = sorted([lc_conid, sc_conid])
+        except Exception as e:
+            print(f"Could not get contract details for signal {signal_data}. Skipping. Error: {e}")
+            continue
+
+        # --- Perform duplicate check using conIds ---
+        if is_duplicate(signal_leg_conIds, float(signal_data['trigger_price']), existing_orders):
+            print(f"--> Duplicate order detected: An existing order with strikes {signal_data['lc_strike']}/{signal_data['sc_strike']} and trigger {signal_data['trigger_price']} already exists. Skipping.")
+            continue
+
         identifier = f"{UNDERLYING_SYMBOL}-{signal_data['expiry']}-{signal_data['lc_strike']}-{signal_data['sc_strike']}-{signal_data['trigger_price']}"
         signal_hash = get_signal_hash(identifier)
         orderId = app.nextOrderId
         app.nextOrderId += 1
         combo_contract = Contract(); combo_contract.symbol=UNDERLYING_SYMBOL; combo_contract.secType="BAG"; combo_contract.currency="USD"; combo_contract.exchange="SMART"
         
-        lc_conid = app.get_spx_option_conid(signal_data['expiry'], signal_data['lc_strike'], "C")
-        sc_conid = app.get_spx_option_conid(signal_data['expiry'], signal_data['sc_strike'], "C")
-
-        leg1 = ComboLeg(); leg1.conId=lc_conid; leg1.ratio=1; leg1.action="BUY"; leg1.exchange="SMART"; leg1.lastTradeDateOrContractMonth=signal_data['expiry']; leg1.strike=float(signal_data['lc_strike']); leg1.right="C"
-        leg2 = ComboLeg(); leg2.conId=sc_conid; leg2.ratio=1; leg2.action="SELL"; leg2.exchange="SMART"; leg2.lastTradeDateOrContractMonth=signal_data['expiry']; leg2.strike=float(signal_data['sc_strike']); leg2.right="C"
+        leg1 = ComboLeg(); leg1.conId=lc_conid; leg1.ratio=1; leg1.action="BUY"; leg1.exchange="SMART"
+        leg2 = ComboLeg(); leg2.conId=sc_conid; leg2.ratio=1; leg2.action="SELL"; leg2.exchange="SMART"
         combo_contract.comboLegs = [leg1, leg2]
         order = Order()
         order.action = "BUY"
@@ -102,7 +161,7 @@ def main():
         order.tif = "DAY"
         order.transmit = False
         order.orderType = signal_data['order_type']
-        order.account = IBKR_ACCOUNT  # <-- Add this line
+        order.account = IBKR_ACCOUNT
         if order.orderType == 'LMT': 
             order.lmtPrice = signal_data['lmt_price']
         elif order.orderType == 'STP': 
@@ -131,22 +190,11 @@ def main():
     # Always use US/Eastern time for market open
     tz = pytz.timezone('US/Eastern')
 
-    # User chooses when to run the check
-    day_selection = ''
-    while day_selection not in ['today', 'next']:
-        user_input = input("\nWhen should the GO/NO-GO check run? [1] Today's Open [2] Next Trading Day's Open: ")
-        if user_input == '1':
-            day_selection = 'today'
-        elif user_input == '2':
-            day_selection = 'next'
-        else:
-            print("Invalid choice. Please enter 1 or 2.")
-
     market_open_time = get_trading_day_open(tz, day_selection)
-    print(f"Scheduled market open check for: {market_open_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
+    print(f"Scheduled market open check for '{day_selection}' open: {market_open_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
     print(f"\nStaged {len(managed_orders)} order(s). Waiting for market open...")
-    while datetime.now(tz) < market_open_time:
-        time.sleep(10)
+
+    asyncio.run(wait_until_market_open(market_open_time, tz))
 
     print(f"\n--- AT-OPEN GO/NO-GO CHECK for {UNDERLYING_SYMBOL} ---")
     underlying_contract = Contract()
@@ -159,12 +207,15 @@ def main():
     attempt_count = 0
     while True:
         app.underlying_open_price = None  # Reset before request
+        app.historical_data_event.clear() # Reset event
         attempt_count += 1
         print(f"Attempt {attempt_count} to fetch {UNDERLYING_SYMBOL} open price...")
         app.reqHistoricalData(99, underlying_contract, "", "1 D", "1 day", "TRADES", 1, 1, False, [])
-        time.sleep(5)  # Wait for data to arrive
+        
+        # --- Best Practice: Wait for historical data using an event ---
+        app.historical_data_event.wait(10) # Wait up to 10 seconds for data
 
-        if app.underlying_open_price:
+        if app.underlying_open_price is not None:
             break  # Success
 
         retry_choice = input("Failed to fetch open price. Try again? (y/n): ").lower()
@@ -186,10 +237,11 @@ def main():
             print(f"** GO for Order {order_info['id']}! ** Open price ({app.underlying_open_price}) is favorable. TRANSMITTING.")
             final_order = order_info["order_obj"]
             final_order.transmit = True
+            # Re-placing the order with transmit=True modifies it
             app.placeOrder(order_info["id"], order_info["contract"], final_order)
+
     print("\nScript has completed its automated tasks.")
-    app.reqOpenOrders()
-    time.sleep(5)
+    time.sleep(2) # Give a moment for final messages
     app.disconnect()
 
 if __name__ == "__main__":
