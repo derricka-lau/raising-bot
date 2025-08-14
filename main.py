@@ -10,7 +10,7 @@ from config import (IBKR_HOST, IBKR_PORT, IBKR_CLIENT_ID,
                     UNDERLYING_SYMBOL, IBKR_ACCOUNT, SNAPMID_OFFSET)
 from signal_utils import (get_signal_from_telegram, parse_multi_signal_message, 
                           get_signals_from_csv, get_signal_interactively, 
-                          get_signal_hash, already_processed, record_processed)
+                          get_signal_hash)
 from ibkr_app import IBKRApp
 
 from ibapi.contract import ComboLeg, Contract
@@ -86,9 +86,6 @@ def main():
         print(f"Processing signal: {signal_data}")
         identifier = f"{UNDERLYING_SYMBOL}-{signal_data['expiry']}-{signal_data['lc_strike']}-{signal_data['sc_strike']}-{signal_data['trigger_price']}"
         signal_hash = get_signal_hash(identifier)
-        if already_processed(signal_hash):
-            print(f"Signal for trigger {signal_data['trigger_price']} already processed. Skipping.")
-            continue
         orderId = app.nextOrderId
         app.nextOrderId += 1
         combo_contract = Contract(); combo_contract.symbol=UNDERLYING_SYMBOL; combo_contract.secType="BAG"; combo_contract.currency="USD"; combo_contract.exchange="SMART"
@@ -190,7 +187,6 @@ def main():
             final_order = order_info["order_obj"]
             final_order.transmit = True
             app.placeOrder(order_info["id"], order_info["contract"], final_order)
-            record_processed(order_info["hash"])
     print("\nScript has completed its automated tasks.")
     app.reqOpenOrders()
     time.sleep(5)
