@@ -8,8 +8,9 @@ Automated SPX Bull Spread Order Management for Interactive Brokers (IBKR)
 
 - Manual entry of SPX bull spread trading signals
 - Stages combo orders in IBKR Trader Workstation (TWS)
-- Waits for next US market open (skips weekends)
-- Checks SPX open price and transmits orders only if conditions are favorable
+- Waits for US market open (skips weekends)
+- **Lets you choose to check at today's or next trading day's open**
+- Fetches SPX open price and transmits orders only if conditions are favorable
 - Prevents duplicate signals and manages orders automatically
 
 ---
@@ -76,7 +77,6 @@ To allow your bot to place orders, you must configure TWS:
    - In TWS, go to `File > Global Configuration > API > Settings`.
    - Check **"Enable ActiveX and Socket Clients"**.
    - Uncheck **"Read-Only API"** (so your bot can place orders).
-   - 
    - Optionally, set trusted IPs if you want extra security.
 
 2. **Precautionary Settings (Risk Checks):**
@@ -86,30 +86,39 @@ To allow your bot to place orders, you must configure TWS:
 
 ## Usage
 
-1. **Start IBKR TWS and enable API access.**
-2. **Run the bot:**
-   ```sh
-   python3 main.py
-   ```
-3. **Manual Signal Entry:**
-   - When prompted, paste your multi-signal message in one line and press Enter.
-   - The bot will parse your signals and stage orders for review.
-   - Orders will be transmitted only if the market open price meets your criteria.
+1.  **Start IBKR TWS and enable API access.** (Ensure settings are correct as per the "IBKR TWS Setup" section).
+
+2.  **Run the bot from your terminal.** You can specify whether to check at today's open or the next trading day's open using a command-line argument.
+
+    *   **To schedule for the *next* trading day's open (default behavior):**
+        ```sh
+        python3 main.py
+        ```
+
+    *   **To schedule for *today's* open:**
+        ```sh
+        python3 main.py --check-day today
+        ```
+
+3.  **Enter Signals:**
+    When prompted, paste your trading signals into the terminal. The bot will parse them, check for duplicates against existing orders in TWS, and stage new orders for review.
+
+4.  **Wait for Market Open:**
+    The bot will wait until 9:30 AM US/Eastern on the selected day, then perform the GO/NO-GO check and either transmit or cancel the staged orders automatically.
 
 ---
 
 ## How It Works
 
-- The bot calculates the **next US trading day open** (skipping weekends).
-- It fetches the SPX open price at 9:30 AM US/Eastern.
+- The bot lets you choose to check at **today's** or the **next trading day's** US market open (skipping weekends).
+- It fetches the SPX open price at 9:30 AM US/Eastern on the selected day.
 - If the open price is favorable, staged orders are transmitted to IBKR.
-- Orders are managed and duplicate signals are ignored.
 
 ---
 
 ## Troubleshooting
 
-- **Missing dependencies:** Run `python3 -m pip install -r requirements.txt --break-system-packages`
+- **Missing dependencies:** Run `python3 -m pip install -r requirements.txt`
 - **IBKR API errors:** Ensure TWS is running and API is enabled.
 - **Order not transmitted:** Check TWS risk settings and ensure your account is specified in `config.py`.
 
