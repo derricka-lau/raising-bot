@@ -36,22 +36,15 @@ def get_trading_day_open(tz, choice='next'):
         
     return target_day.replace(hour=9, minute=30, second=0, microsecond=0)
 
-def is_duplicate(signal, existing_orders):
+def is_duplicate(signal_leg_conIds, signal_trigger, existing_orders):
     """
-    Checks if a signal matches any existing open order in IBKR.
+    Checks if a signal matches any existing open order by comparing leg conIds and trigger price.
     """
-    signal_strikes = sorted([float(signal["lc_strike"]), float(signal["sc_strike"])])
     for order in existing_orders:
-        if (order.get("symbol") == signal["symbol"] and
-            order.get("expiry") == signal["expiry"] and
-            order.get("order_type") == signal["order_type"] and
-            order.get("trigger_price") == float(signal["trigger_price"])):
-            
-            legs = order.get("comboLegs", [])
-            order_strikes = sorted([leg.get("strike") for leg in legs])
-            
-            if order_strikes == signal_strikes:
-                return True # Found a perfect match
+        if (order.get("secType") == "BAG" and
+            order.get("trigger_price") == signal_trigger and
+            order.get("leg_conIds") == signal_leg_conIds):
+            return True # Found a perfect match
     return False
 
 async def wait_until_market_open(market_open_time, tz):
@@ -136,25 +129,31 @@ def main():
         print("No new signals found from any source. Exiting.")
         app.disconnect(); return
     
-    # The time.sleep(2) here is removed, as we now wait for events.
-
     for signal_data in signals_to_process:
         print(f"Processing signal: {signal_data}")
-        signal_data["symbol"] = UNDERLYING_SYMBOL  # Ensure symbol is present
-        if is_duplicate(signal_data, existing_orders):
-            print(f"Duplicate order detected for {signal_data}. Skipping.")
+        
+        # --- Get conIds for the new signal's legs FIRST ---
+        try:
+            lc_conid = app.get_spx_option_conid(signal_data['expiry'], signal_data['lc_strike'], "C")
+            sc_conid = app.get_spx_option_conid(signal_data['expiry'], signal_data['sc_strike'], "C")
+            signal_leg_conIds = sorted([lc_conid, sc_conid])
+        except Exception as e:
+            print(f"Could not get contract details for signal {signal_data}. Skipping. Error: {e}")
             continue
+
+        # --- Perform duplicate check using conIds ---
+        if is_duplicate(signal_leg_conIds, float(signal_data['trigger_price']), existing_orders):
+            print(f"--> Duplicate order detected: An existing order with strikes {signal_data['lc_strike']}/{signal_data['sc_strike']} and trigger {signal_data['trigger_price']} already exists. Skipping.")
+            continue
+
         identifier = f"{UNDERLYING_SYMBOL}-{signal_data['expiry']}-{signal_data['lc_strike']}-{signal_data['sc_strike']}-{signal_data['trigger_price']}"
         signal_hash = get_signal_hash(identifier)
         orderId = app.nextOrderId
         app.nextOrderId += 1
         combo_contract = Contract(); combo_contract.symbol=UNDERLYING_SYMBOL; combo_contract.secType="BAG"; combo_contract.currency="USD"; combo_contract.exchange="SMART"
         
-        lc_conid = app.get_spx_option_conid(signal_data['expiry'], signal_data['lc_strike'], "C")
-        sc_conid = app.get_spx_option_conid(signal_data['expiry'], signal_data['sc_strike'], "C")
-
-        leg1 = ComboLeg(); leg1.conId=lc_conid; leg1.ratio=1; leg1.action="BUY"; leg1.exchange="SMART"; leg1.lastTradeDateOrContractMonth=signal_data['expiry']; leg1.strike=float(signal_data['lc_strike']); leg1.right="C"
-        leg2 = ComboLeg(); leg2.conId=sc_conid; leg2.ratio=1; leg2.action="SELL"; leg2.exchange="SMART"; leg2.lastTradeDateOrContractMonth=signal_data['expiry']; leg2.strike=float(signal_data['sc_strike']); leg2.right="C"
+        leg1 = ComboLeg(); leg1.conId=lc_conid; leg1.ratio=1; leg1.action="BUY"; leg1.exchange="SMART"
+        leg2 = ComboLeg(); leg2.conId=sc_conid; leg2.ratio=1; leg2.action="SELL"; leg2.exchange="SMART"
         combo_contract.comboLegs = [leg1, leg2]
         order = Order()
         order.action = "BUY"
@@ -162,7 +161,7 @@ def main():
         order.tif = "DAY"
         order.transmit = False
         order.orderType = signal_data['order_type']
-        order.account = IBKR_ACCOUNT  # <-- Add this line
+        order.account = IBKR_ACCOUNT
         if order.orderType == 'LMT': 
             order.lmtPrice = signal_data['lmt_price']
         elif order.orderType == 'STP': 

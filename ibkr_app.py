@@ -4,7 +4,7 @@ import threading
 from ibapi.client import EClient
 from ibapi.wrapper import EWrapper
 from ibapi.contract import Contract
-import time
+from ibapi.order_condition import PriceCondition
 
 class IBKRApp(EWrapper, EClient):
     def __init__(self):
@@ -73,7 +73,7 @@ class IBKRApp(EWrapper, EClient):
         contract.multiplier = "100"
         self.lastConId = None
         self.contract_details_event.clear()
-        self.reqContractDetails(reqId, contract)
+        self.reqContractDetails(11, contract)  # <-- Use a fixed reqId here
         self.contract_details_event.wait(5) # Wait up to 5 seconds
         if not self.lastConId:
             raise Exception(f"Failed to get option conId for {strike} {right}.")
@@ -94,16 +94,16 @@ class IBKRApp(EWrapper, EClient):
         order_info = {
             "orderId": orderId,
             "symbol": contract.symbol,
-            "expiry": contract.lastTradeDateOrContractMonth,
+            "secType": contract.secType,
             "order_type": order.orderType,
-            "comboLegs": [],
+            "leg_conIds": [], # We will store conIds instead of strikes
             "trigger_price": None
         }
         if contract.secType == 'BAG' and contract.comboLegs:
-            order_info["comboLegs"] = [{"strike": leg.strike, "right": leg.right, "action": leg.action} for leg in contract.comboLegs]
+            order_info["leg_conIds"] = sorted([leg.conId for leg in contract.comboLegs])
         
         for cond in order.conditions:
-            if cond.conId != 0: # Price condition is attached
+            if isinstance(cond, PriceCondition):
                 order_info["trigger_price"] = cond.price
 
         self.open_orders.append(order_info)
@@ -152,7 +152,7 @@ class IBKRApp(EWrapper, EClient):
         contract.multiplier = "100"
         self.lastConId = None
         self.contract_details_event.clear()
-        self.reqContractDetails(reqId, contract)
+        self.reqContractDetails(11, contract)  # <-- Use a fixed reqId here
         self.contract_details_event.wait(5) # Wait up to 5 seconds
         if not self.lastConId:
             raise Exception(f"Failed to get option conId for {strike} {right}.")
@@ -173,16 +173,18 @@ class IBKRApp(EWrapper, EClient):
         order_info = {
             "orderId": orderId,
             "symbol": contract.symbol,
-            "expiry": contract.lastTradeDateOrContractMonth,
+            "secType": contract.secType,
             "order_type": order.orderType,
-            "comboLegs": [],
+            "leg_conIds": [], # We will store conIds instead of strikes
             "trigger_price": None
         }
         if contract.secType == 'BAG' and contract.comboLegs:
-            order_info["comboLegs"] = [{"strike": leg.strike, "right": leg.right, "action": leg.action} for leg in contract.comboLegs]
+            # CORRECTED: Get conIds from legs, as strike/right are not populated here.
+            order_info["leg_conIds"] = sorted([leg.conId for leg in contract.comboLegs])
         
         for cond in order.conditions:
-            if cond.conId != 0: # Price condition is attached
+            # Check if it's a price condition before accessing price
+            if isinstance(cond, PriceCondition):
                 order_info["trigger_price"] = cond.price
 
         self.open_orders.append(order_info)
