@@ -1,5 +1,6 @@
 # signal_utils.py
 
+import asyncio
 import hashlib
 import re
 import csv
@@ -25,10 +26,15 @@ def get_signal_from_telegram():
     if not TELEGRAM_API_ID or "YOUR_API_ID" in TELEGRAM_API_ID: return None
     try:
         client = TelegramClient('session_name', TELEGRAM_API_ID, TELEGRAM_API_HASH)
-        import asyncio
         async def run():
-            await client.start(); message = await client.get_messages(TELEGRAM_CHANNEL, limit=1); return message[0].text
-        return asyncio.run(run())
+            await client.start()
+            message = await client.get_messages(TELEGRAM_CHANNEL, limit=1)
+            return message[0].text
+        # Add timeout here (e.g., 5 seconds)
+        return asyncio.run(asyncio.wait_for(run(), timeout=5))
+    except asyncio.TimeoutError:
+        print("Telegram connection timed out. Please use manual entry.")
+        return None
     except Exception as e:
         print(f"Could not connect to Telegram: {e}. Please use manual entry.")
         return None
