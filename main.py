@@ -58,6 +58,20 @@ async def wait_until_market_open(market_open_time, tz):
         await asyncio.sleep(1)
     print("\nMarket open reached!")
 
+def process_managed_orders(app, managed_orders, underlying_symbol):
+    """
+    Processes managed orders by comparing open price to trigger and transmitting/cancelling as needed.
+    """
+    for order_info in managed_orders:
+        if app.underlying_open_price >= order_info["trigger"]:
+            print(f"!! NO-GO for Order {order_info['id']} !! {underlying_symbol} open ({app.underlying_open_price}) >= trigger ({order_info['trigger']}). CANCELLING.")
+            app.cancelOrder(order_info["id"])
+        else:
+            print(f"** GO for Order {order_info['id']}! ** Open price ({app.underlying_open_price}) is favorable. TRANSMITTING.")
+            final_order = order_info["order_obj"]
+            final_order.transmit = True
+            app.placeOrder(order_info["id"], order_info["contract"], final_order)
+
 def main_loop():
     parser = argparse.ArgumentParser(description="Automated SPX Bull Spread Order Management for IBKR.")
     parser.add_argument(
@@ -179,10 +193,11 @@ def main_loop():
     if not managed_orders:
         print("No orders were staged (they may have been duplicates or none were valid). Exiting."); app.disconnect(); return
 
-    # Always use US/Eastern time for market open
+    # Always use US/Eastern time for market open/close
     tz = pytz.timezone('US/Eastern')
-
     market_open_time = get_trading_day_open(tz, day_selection)
+    market_close_time = market_open_time.replace(hour=16, minute=0, second=0, microsecond=0)
+
     print(f"Scheduled market open check for '{day_selection}' open: {market_open_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
     print(f"\nStaged {len(managed_orders)} order(s). Waiting for market open...")
 
@@ -221,16 +236,39 @@ def main_loop():
 
     print(f"SPX open price: {app.underlying_open_price}")
 
-    for order_info in managed_orders:
-        if app.underlying_open_price >= order_info["trigger"]:
-            print(f"!! NO-GO for Order {order_info['id']} !! {UNDERLYING_SYMBOL} open ({app.underlying_open_price}) >= trigger ({order_info['trigger']}). CANCELLING.")
-            app.cancelOrder(order_info["id"])
-        else:
-            print(f"** GO for Order {order_info['id']}! ** Open price ({app.underlying_open_price}) is favorable. TRANSMITTING.")
+    managed_orders.sort(key=lambda x: x["trigger"])
+    process_managed_orders(app, managed_orders, UNDERLYING_SYMBOL)
+    time.sleep(10)
+    
+    # Check for critical error after placing orders
+    while app.both_sides_error:
+        now = datetime.now(tz)
+        # Retry until market close
+        if now >= market_close_time:
+            print("Market close reached. Stopping error retry loop.")
+            break
+
+        print("A critical error occurred: Both sides of the US Option contract were detected. Process again after 1 minute.")
+        time.sleep(60)  # Wait 1 minutes before retrying
+
+        # Filter managed_orders for the problematic reqId/orderId
+        error_order_id = app.last_error_orderId
+        error_orders = [o for o in managed_orders if o["id"] == error_order_id]
+
+        # Assign a new orderId for retransmitting only the problematic order
+        for order_info in error_orders:
+            print(f"Retransmitting order {order_info['id']} with new OrderId...")
+            new_orderId = app.nextOrderId
+            app.nextOrderId += 1
             final_order = order_info["order_obj"]
             final_order.transmit = True
-            # Re-placing the order with transmit=True modifies it
-            app.placeOrder(order_info["id"], order_info["contract"], final_order)
+            app.placeOrder(new_orderId, order_info["contract"], final_order)
+            # Update managed_orders so the new orderId is tracked
+            order_info["id"] = new_orderId
+        time.sleep(10)
+        if not app.both_sides_error:
+            print("No more critical errors detected. Continuing with normal operation.")
+            break
 
     print("\nScript has completed its automated tasks.")
     time.sleep(2) # Give a moment for final messages
