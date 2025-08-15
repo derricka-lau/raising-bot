@@ -3,6 +3,7 @@
 import hashlib
 import re
 import csv
+from telethon import TelegramClient
 
 from config import (TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_CHANNEL,
                     DEFAULT_ORDER_TYPE, DEFAULT_LIMIT_PRICE, DEFAULT_STOP_PRICE,
@@ -20,9 +21,9 @@ def record_processed(hash_str, filename='processed_signals.txt'):
 
 # --- Signal Input Functions ---
 def get_signal_from_telegram():
+    print("Fetching latest signal from Telegram channel...")
     if not TELEGRAM_API_ID or "YOUR_API_ID" in TELEGRAM_API_ID: return None
     try:
-        from telethon import TelegramClient
         client = TelegramClient('session_name', TELEGRAM_API_ID, TELEGRAM_API_HASH)
         import asyncio
         async def run():

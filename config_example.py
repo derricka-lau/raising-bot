@@ -15,10 +15,10 @@ DEFAULT_LIMIT_PRICE = None
 DEFAULT_STOP_PRICE = None
 SNAPMID_OFFSET = 0.5  # Default offset for SNAP MID orders
 
-# # --- Telegram Credentials (OPTIONAL - Tier 1) ---
-# TELEGRAM_API_ID = 'YOUR_API_ID'
-# TELEGRAM_API_HASH = 'YOUR_API_HASH'
-# TELEGRAM_CHANNEL = '@RaisingCycle_Notification_bot'
+# --- Telegram Credentials (OPTIONAL - Tier 1) ---
+TELEGRAM_API_ID = 'YOUR_API_ID'
+TELEGRAM_API_HASH = 'YOUR_API_HASH'
+TELEGRAM_CHANNEL = '@RaisingCycle_Notification_bot'
 
 # # --- CSV Configuration (OPTIONAL - Tier 2) ---
 # CSV_FILE_PATH = 'QuantRaiser Raising Cycle.csv'

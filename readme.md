@@ -90,14 +90,14 @@ To allow your bot to place orders, you must configure TWS:
 
 2.  **Run the bot from your terminal.** You can specify whether to check at today's open or the next trading day's open using a command-line argument.
 
-    *   **To schedule for the *next* trading day's open (default behavior):**
+    *   **To schedule for the *today* trading day's open (default behavior):**
         ```sh
         python3 main.py
         ```
 
-    *   **To schedule for *today's* open:**
+    *   **To schedule for *next's* open:**
         ```sh
-        python3 main.py --check-day today
+        python3 main.py --check-day next
         ```
 
 3.  **Enter Signals:**
