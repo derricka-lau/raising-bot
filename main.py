@@ -120,7 +120,6 @@ def main_loop():
         app.disconnect()
         day_selection = 'next'  # Always wait for next trading day after first run
         time.sleep(10)
-        continue
 
     for signal_data in signals_to_process:
         print(f"Processing signal: {signal_data}")
