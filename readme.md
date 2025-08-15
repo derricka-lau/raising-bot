@@ -143,3 +143,36 @@ Please fork the repo and submit your changes.
 MIT License
 
 ---
+
+## Optional: Telegram Signal Integration
+
+You can configure the bot to automatically fetch trading signals from a Telegram channel.
+
+### Setup Steps
+
+1. **Create a Telegram API Application:**
+   - Go to [my.telegram.org](https://my.telegram.org).
+   - Log in and click **API Development Tools**.
+   - Create a new application and note your `api_id` and `api_hash`.
+
+2. **Install Telethon:**
+   ```sh
+   python3 -m pip install telethon
+   ```
+
+3. **Configure Telegram in `config.py`:**
+   Add these fields to your `config.py`:
+   ```python
+   TELEGRAM_API_ID = 1234567           # Your Telegram API ID (integer)
+   TELEGRAM_API_HASH = "your_api_hash" # Your Telegram API hash (string)
+   TELEGRAM_CHANNEL = "your_channel"   # Channel username or ID (e.g. "@mychannel")
+   ```
+   - If you do not wish to use Telegram, leave these fields blank or set `TELEGRAM_API_ID = "YOUR_API_ID"`.
+
+4. **How It Works:**
+   - If Telegram is configured, the bot will attempt to fetch the latest signal from your channel.
+   - If Telegram is not configured or times out, you can enter signals manually.
+
+---
+
+> **Tip:** Telegram integration is not required. If you skip this setup, the bot will prompt you for signals manually.
