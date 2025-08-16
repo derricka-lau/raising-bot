@@ -150,6 +150,12 @@ class IBKRApp(EWrapper, EClient):
         }
         self.filled_orders.append(order_info)
 
+    def execDetailsEnd(self, reqId):
+        """Called when all execution details have been received."""
+        super().execDetailsEnd(reqId)
+        print("Finished receiving executions.")
+        self.executions_event.set() # <-- ADD THIS
+
     def get_new_reqid(self):
         reqid = self.nextReqId
         self.nextReqId += 1

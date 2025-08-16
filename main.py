@@ -209,7 +209,16 @@ def main_loop():
         order.firmQuoteOnly = False
 
         app.placeOrder(orderId, combo_contract, order)
-        managed_orders.append({"id": orderId, "trigger": float(signal_data['trigger_price']), "contract": combo_contract, "order_obj": order, "hash": signal_hash})
+        # --- FIX: ADD STRIKES TO THE DICTIONARY ---
+        managed_orders.append({
+            "id": orderId, 
+            "trigger": float(signal_data['trigger_price']), 
+            "lc_strike": float(signal_data['lc_strike']), # Add this
+            "sc_strike": float(signal_data['sc_strike']), # Add this
+            "contract": combo_contract, 
+            "order_obj": order, 
+            "hash": signal_hash
+        })
         print(f"--> Staged Order {orderId} for {UNDERLYING_SYMBOL} ({order.orderType}) with trigger at {signal_data['trigger_price']} for review.")
     # Fetch and display open orders from IBKR
     if not managed_orders:
@@ -285,10 +294,7 @@ def main_loop():
             # Since we know there's only one order, access it directly
             order_info = error_orders[0] 
             
-            lc_strike = None
-            for leg in order_info["contract"].comboLegs:
-                if leg.action == "BUY":
-                    lc_strike = leg.strike
+            lc_strike = order_info.get("lc_strike")
 
             if lc_strike is None:
                 print(f"Could not determine LC strike for error order {error_id}. Skipping.")
