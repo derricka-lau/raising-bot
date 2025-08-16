@@ -121,6 +121,18 @@ def main_loop():
         app.disconnect()
         return
 
+    # --- ADD THIS SECTION TO START THE PRICE STREAM ---
+    print("\nStarting live SPX price stream...")
+    spx_stream_contract = Contract()
+    spx_stream_contract.symbol = "SPX"
+    spx_stream_contract.secType = "IND"
+    spx_stream_contract.exchange = "CBOE"
+    spx_stream_contract.currency = "USD"
+    # reqId 100 is dedicated to this stream (matches tickPrice)
+    app.reqMktData(100, spx_stream_contract, "", False, False, [])
+    time.sleep(2) # Give a moment for the stream to start
+    # --- END OF ADDED SECTION ---
+
     managed_orders = []
     signals_to_process = []
 
@@ -282,8 +294,14 @@ def main_loop():
                 print(f"Could not determine LC strike for error order {error_id}. Skipping.")
                 continue
 
-            print(f"Checking retry condition for order {error_id}: SPX open price: {app.underlying_open_price}, LC strike: {lc_strike}")
-            if app.underlying_open_price >= lc_strike:
+            # --- USE THE LIVE PRICE HERE ---
+            live_price = app.current_spx_price
+            if live_price is None:
+                print(f"\nLive SPX price not available yet. Waiting...")
+                continue
+
+            print(f"\nChecking retry condition for order {error_id}: Live SPX price: {live_price}, LC strike: {lc_strike}")
+            if live_price >= lc_strike:
                 print(f"Condition met. Retrying order {error_id}...")
                 new_orderId = app.nextOrderId
                 app.nextOrderId += 1
@@ -296,7 +314,8 @@ def main_loop():
                 print(f"Condition not met for order {error_id}. Will re-check in the next cycle.")
 
     print("\nScript has completed its automated tasks.")
-    time.sleep(2) # Give a moment for final messages
+    app.cancelMktData(100)
+    time.sleep(2)
     app.disconnect()
 
 if __name__ == "__main__":

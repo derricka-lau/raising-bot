@@ -11,6 +11,7 @@ class IBKRApp(EWrapper, EClient):
         EClient.__init__(self, self)
         self.nextOrderId = None
         self.underlying_open_price = None
+        self.current_spx_price = None # <-- ADD THIS: For the live price
         self.lastConId = None
         self.open_orders = []
         self.filled_orders = []  # <-- add this
@@ -21,7 +22,6 @@ class IBKRApp(EWrapper, EClient):
         self.historical_data_event = threading.Event()
         self.contract_details_event = threading.Event()
         self.order_status_event = threading.Event()
-        self.both_sides_error = False
         self.error_order_ids = []
 
     def nextValidId(self, orderId: int):
@@ -31,11 +31,6 @@ class IBKRApp(EWrapper, EClient):
 
     def error(self, reqId, errorCode, errorString):
         print(f"IBKR ERROR: reqId {reqId}, Code {errorCode} - {errorString}")
-        if errorCode == 201:
-            self.both_sides_error = True
-            # You need to know which orderId caused this error
-            # Set self.last_error_orderId in orderStatus instead
-
         # Error codes for completed data requests
         if errorCode == 162: # Historical data farm is connected
             return # Ignore this informational message
@@ -43,6 +38,14 @@ class IBKRApp(EWrapper, EClient):
             return # Ignore informational messages
         if errorCode == 202: # Order Canceled
             print(f"Order cancellation confirmed for reqId {reqId}.")
+
+    def tickPrice(self, reqId, tickType, price, attrib):
+        """Callback for streaming market data."""
+        super().tickPrice(reqId, tickType, price, attrib)
+        # tickType 4 is 'LAST_PRICE'
+        if reqId == 100 and tickType == 4: # Use a dedicated reqId for the SPX stream
+            self.current_spx_price = price
+            print(f"\rLive SPX Price: {self.current_spx_price}", end="", flush=True)
 
     def historicalData(self, reqId, bar):
         if reqId == 99:
