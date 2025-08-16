@@ -13,6 +13,7 @@ class IBKRApp(EWrapper, EClient):
         self.underlying_open_price = None
         self.lastConId = None
         self.open_orders = []
+        self.filled_orders = []  # <-- add this
         self.nextReqId = 1  # Start from 1 or any number
         # --- Add threading events for synchronization ---
         self.connected_event = threading.Event()
@@ -21,7 +22,7 @@ class IBKRApp(EWrapper, EClient):
         self.contract_details_event = threading.Event()
         self.order_status_event = threading.Event()
         self.both_sides_error = False
-        self.last_error_orderId = None  # <-- add this
+        self.error_order_ids = []
 
     def nextValidId(self, orderId: int):
         super().nextValidId(orderId)
@@ -131,7 +132,20 @@ class IBKRApp(EWrapper, EClient):
         if status in ("Filled", "Cancelled", "Inactive", "Rejected"):
             self.order_status_event.set()
         if status == "Inactive":
-            self.last_error_orderId = orderId
+            if orderId not in self.error_order_ids:
+                self.error_order_ids.append(orderId)
+
+    def execDetails(self, reqId, contract, execution):
+        # This is called for each filled order
+        order_info = {
+            "orderId": execution.orderId,
+            "symbol": contract.symbol,
+            "secType": contract.secType,
+            "conId": contract.conId,
+            "price": execution.price,
+            # Add more fields as needed
+        }
+        self.filled_orders.append(order_info)
 
     def get_new_reqid(self):
         reqid = self.nextReqId

@@ -17,6 +17,7 @@ from ibkr_app import IBKRApp
 from ibapi.contract import ComboLeg, Contract
 from ibapi.order import Order
 from ibapi.order_condition import Create, OrderCondition
+from ibapi.execution import ExecutionFilter
 
 def get_trading_day_open(tz, choice='today'):
     """
@@ -100,8 +101,17 @@ def main_loop():
     print("Requesting open orders...")
     app.reqOpenOrders()
     app.open_orders_event.wait(5)
+    
     existing_orders = app.open_orders
     print(f"Found {len(existing_orders)} open order(s).")
+
+    print("Requesting filled orders...")
+    app.executions_event.clear()
+    app.reqExecutions(app.get_new_reqid(), ExecutionFilter())
+    app.executions_event.wait(5)  # Wait up to 5 seconds for filled orders
+
+    existing_orders = app.open_orders + app.filled_orders
+    print(f"Found {len(existing_orders)} open or filled order(s).")
 
     try:
         trigger_conid = app.get_spx_index_conid()
@@ -240,35 +250,50 @@ def main_loop():
     process_managed_orders(app, managed_orders, UNDERLYING_SYMBOL)
     time.sleep(10)
     
-    # Check for critical error after placing orders
-    while app.both_sides_error:
+    # Check for critical error after placing orders. Loop as long as there are error IDs.
+    while app.error_order_ids:
         now = datetime.now(tz)
-        # Retry until market close
         if now >= market_close_time:
             print("Market close reached. Stopping error retry loop.")
             break
+        
+        print(f"Critical error(s) detected for order IDs: {app.error_order_ids}. Retrying after 1 minute.")
+        time.sleep(60)  # Always wait 60 seconds before next retry
 
-        print("A critical error occurred: Both sides of the US Option contract were detected. Process again after 1 minute.")
-        time.sleep(60)  # Wait 1 minutes before retrying
+        # Loop through a copy of the error list to avoid modification issues
+        for error_id in list(app.error_order_ids):
+            error_orders = [o for o in managed_orders if o["id"] == error_id]
 
-        # Filter managed_orders for the problematic reqId/orderId
-        error_order_id = app.last_error_orderId
-        error_orders = [o for o in managed_orders if o["id"] == error_order_id]
+            if not error_orders:
+                # This error was likely resolved (ID changed), so remove it from the list.
+                print(f"Order ID {error_id} seems resolved. Removing from error list.")
+                app.error_order_ids.remove(error_id)
+                continue
 
-        # Assign a new orderId for retransmitting only the problematic order
-        for order_info in error_orders:
-            print(f"Retransmitting order {order_info['id']} with new OrderId...")
-            new_orderId = app.nextOrderId
-            app.nextOrderId += 1
-            final_order = order_info["order_obj"]
-            final_order.transmit = True
-            app.placeOrder(new_orderId, order_info["contract"], final_order)
-            # Update managed_orders so the new orderId is tracked
-            order_info["id"] = new_orderId
-        time.sleep(10)
-        if not app.both_sides_error:
-            print("No more critical errors detected. Continuing with normal operation.")
-            break
+            # Since we know there's only one order, access it directly
+            order_info = error_orders[0] 
+            
+            lc_strike = None
+            for leg in order_info["contract"].comboLegs:
+                if leg.action == "BUY":
+                    lc_strike = leg.strike
+
+            if lc_strike is None:
+                print(f"Could not determine LC strike for error order {error_id}. Skipping.")
+                continue
+
+            print(f"Checking retry condition for order {error_id}: SPX open price: {app.underlying_open_price}, LC strike: {lc_strike}")
+            if app.underlying_open_price >= lc_strike:
+                print(f"Condition met. Retrying order {error_id}...")
+                new_orderId = app.nextOrderId
+                app.nextOrderId += 1
+                final_order = order_info["order_obj"]
+                final_order.transmit = True
+                app.placeOrder(new_orderId, order_info["contract"], final_order)
+                # This is the key step: updating the ID resolves the error for the next loop check
+                order_info["id"] = new_orderId
+            else:
+                print(f"Condition not met for order {error_id}. Will re-check in the next cycle.")
 
     print("\nScript has completed its automated tasks.")
     time.sleep(2) # Give a moment for final messages
