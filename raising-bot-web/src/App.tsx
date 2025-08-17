@@ -89,15 +89,33 @@ function App() {
         const data: { output?: string[] } = await r.json();
         if (!cancelled) {
           setOutput((prev) => {
-            const newLines: string[] = data.output || [];
-            if (newLines.length === prev.length) return prev;
-            // Update countdown in place
-            const last = newLines[newLines.length - 1] || "";
-            if (last.startsWith("Waiting for market open:")) {
-              const prevWithoutCountdown = prev.filter((l) => !l.startsWith("Waiting for market open:"));
-              return [...prevWithoutCountdown, last];
+            const serverOutput: string[] = data.output || [];
+            const lastServerLine = serverOutput[serverOutput.length - 1] || "";
+
+            // --- FIX STARTS HERE ---
+
+            // 1. On first load after refresh, `prev` is empty. Always take the full server output.
+            if (prev.length === 0) {
+              return serverOutput;
             }
-            return newLines;
+
+            // 2. If the last line is a countdown, update it in-place to prevent flooding.
+            if (lastServerLine.startsWith("Waiting for market open:")) {
+              // Filter the *previous* state to remove any old countdowns...
+              const prevWithoutCountdown = prev.filter((l) => !l.startsWith("Waiting for market open:"));
+              // ...and add the new one.
+              return [...prevWithoutCountdown, lastServerLine];
+            }
+
+            // 3. For any other new lines, just take the full server output.
+            if (serverOutput.length > prev.length) {
+                return serverOutput;
+            }
+
+            // 4. If nothing changed, return the old state to prevent re-renders.
+            return prev;
+            
+            // --- FIX ENDS HERE ---
           });
         }
         delay = 1000; // reset on success
