@@ -84,13 +84,13 @@ def get_signals_from_csv():
 def get_signal_interactively():
     """Presents a menu for manual signal entry."""
     print("\n--- MANUAL SIGNAL ENTRY ---")
-    print("  1. Paste the full multi-signal message.")
+    print("  1. Paste the full telegram message.")
     print("  2. Enter details for one or more trades one-by-one.")
     
     while True:
         choice = input("Please choose an option (1 or 2): ").strip()
         if choice == '1':
-            pasted_text = input("\nPaste message here in ONE line and press Enter:\n> ")
+            pasted_text = input("\nPaste the full telegram signal message:\n> ")
             if pasted_text.strip():
                 parsed_signals = parse_multi_signal_message(pasted_text)
                 if parsed_signals:

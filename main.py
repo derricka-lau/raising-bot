@@ -82,11 +82,25 @@ def main_loop():
         default='today', 
         help="Specify whether to run the GO/NO-GO check at 'today's' or the 'next' trading day's open. Defaults to 'today'."
     )
+    # Add this argument
+    parser.add_argument(
+        '--client-id',
+        type=int,
+        default=None,
+        help="Override the IBKR Client ID from the config file."
+    )
     args = parser.parse_args()
     day_selection = args.check_day
 
+    # Use the client ID from args if provided, otherwise from config
+    client_id_to_use = args.client_id if args.client_id is not None else IBKR_CLIENT_ID
+
     app = IBKRApp()
-    app.connect(IBKR_HOST, IBKR_PORT, IBKR_CLIENT_ID)
+    # Ensure executions_event exists for compatibility
+    if not hasattr(app, "executions_event"):
+        import threading
+        app.executions_event = threading.Event()
+    app.connect(IBKR_HOST, IBKR_PORT, client_id_to_use) # Use the new variable here
     api_thread = threading.Thread(target=app.run, daemon=True)
     api_thread.start()
 
