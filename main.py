@@ -175,7 +175,7 @@ def get_trigger_conid_with_retry(app: IBKRApp, attempts: int = 3) -> Optional[in
     return None
 
 def start_spx_stream(app: IBKRApp, req_id_start: int = 100, tries: int = 3) -> None:
-    print("\nStarting live SPX price stream...", flush=True)
+    print("Starting live SPX price stream...", flush=True)
     spx = Contract(); spx.symbol="SPX"; spx.secType="IND"; spx.exchange="CBOE"; spx.currency="USD"
     for i in range(tries):
         req_id = req_id_start + i  # Use a different req_id each time
@@ -358,7 +358,7 @@ def main_loop():
         print("Fatal Error: could not fetch SPX conId. Exiting.")
         app.disconnect(); return
 
-    print("\n--------------------------", flush=True)
+    print("--------------------------", flush=True)
     print("Looking for new signals...", flush=True)
     signals = gather_signals()
     if not signals:
@@ -417,7 +417,7 @@ def main_loop():
     # Post-place error retry loop
     run_error_retry_loop(app, managed_orders, market_close_time, tz)
 
-    print("\nScript has completed its automated tasks.", flush=True)
+    print("Script has completed its automated tasks.", flush=True)
     app.cancelMktData(100)
     time.sleep(2)
     app.disconnect()

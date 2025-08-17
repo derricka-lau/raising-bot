@@ -69,7 +69,7 @@ def parse_multi_signal_message(text):
 
 def get_signal_interactively():
     """Presents a menu for manual signal entry."""
-    print("\n--- MANUAL SIGNAL ENTRY ---", flush=True)
+    print("--- MANUAL SIGNAL ENTRY ---", flush=True)
     print("Paste the full telegram signal message:", flush=True)
     pasted_text = input().strip()
     if pasted_text:
@@ -78,6 +78,6 @@ def get_signal_interactively():
             print(f"Parsed {len(parsed_signals)} signal(s) successfully from pasted text.", flush=True)
             return parsed_signals
         else:
-            print("\nCould not find any valid, untriggered signals in the pasted message.", flush=True)
+            print("Could not find any valid, untriggered signals in the pasted message.", flush=True)
     else: print("No message pasted.", flush=True)
 
