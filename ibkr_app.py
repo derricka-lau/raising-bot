@@ -30,14 +30,14 @@ class IBKRApp(EWrapper, EClient):
         self.connected_event.set() # Signal that connection is complete
 
     def error(self, reqId, errorCode, errorString):
-        print(f"IBKR ERROR: reqId {reqId}, Code {errorCode} - {errorString}")
-        # Error codes for completed data requests
-        if errorCode == 162: # Historical data farm is connected
-            return # Ignore this informational message
-        if reqId > -1 and errorCode in [2104, 2106, 2158]: # Market data connection OK
-            return # Ignore informational messages
-        if errorCode == 202: # Order Canceled
-            print(f"Order cancellation confirmed for reqId {reqId}.")
+        # Informational codes
+        info_codes = [2104, 2106, 2158, 162, 2107]
+        if errorCode in info_codes:
+            print(f"IBKR INFO: reqId {reqId}, Code {errorCode} - {errorString}", flush=True)
+            return
+        if errorCode == 202:
+            print(f"Order cancellation confirmed for reqId {reqId}.", flush=True)
+        print(f"IBKR ERROR: reqId {reqId}, Code {errorCode} - {errorString}", flush=True)
 
     def tickPrice(self, reqId, tickType, price, attrib):
         """Callback for streaming market data."""
@@ -50,13 +50,13 @@ class IBKRApp(EWrapper, EClient):
     def historicalData(self, reqId, bar):
         if reqId == 99:
             self.underlying_open_price = bar.open
-            print(f"Received historical data: Open={bar.open}")
+            print(f"Received historical data: Open={bar.open}", flush=True)
             self.historical_data_event.set() # Signal that data has arrived
 
     def historicalDataEnd(self, reqId: int, start: str, end: str):
         super().historicalDataEnd(reqId, start, end)
         if not self.underlying_open_price:
-            print("Historical data request finished but no data was received.")
+            print("Historical data request finished but no data was received.", flush=True)
             self.historical_data_event.set() # Unblock the wait even if there's no data
 
     def get_spx_index_conid(self):
@@ -121,12 +121,12 @@ class IBKRApp(EWrapper, EClient):
 
     def openOrderEnd(self):
         super().openOrderEnd()
-        print("Finished receiving open orders.")
+        print("Finished receiving open orders.", flush=True)
         self.open_orders_event.set() # Signal that all open orders have been received
 
     def orderStatus(self, orderId, status, filled, remaining, avgFillPrice, permId, parentId, lastFillPrice, clientId, whyHeld, mktCapPrice):
         super().orderStatus(orderId, status, filled, remaining, avgFillPrice, permId, parentId, lastFillPrice, clientId, whyHeld, mktCapPrice)
-        print(f"OrderStatus. ID: {orderId}, Status: {status}, Filled: {filled}, Remaining: {remaining}, AvgFillPrice: {avgFillPrice}")
+        print(f"OrderStatus. ID: {orderId}, Status: {status}, Filled: {filled}, Remaining: {remaining}, AvgFillPrice: {avgFillPrice}", flush=True)
         # Set the event when all orders are processed
         if status in ("Filled", "Cancelled", "Inactive", "Rejected"):
             self.order_status_event.set()
@@ -149,7 +149,7 @@ class IBKRApp(EWrapper, EClient):
     def execDetailsEnd(self, reqId):
         """Called when all execution details have been received."""
         super().execDetailsEnd(reqId)
-        print("Finished receiving executions.")
+        print("Finished receiving executions.", flush=True)
         self.executions_event.set() # <-- ADD THIS
 
     def get_new_reqid(self):
