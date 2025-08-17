@@ -22,16 +22,18 @@ def record_processed(hash_str, filename='processed_signals.txt'):
 # --- Signal Input Functions ---
 def get_signal_from_telegram():
     print("telegram id:", TELEGRAM_API_ID, flush=True)
+    print("telegram channel:", TELEGRAM_CHANNEL, flush=True)
     print("Fetching latest signal from Telegram channel...", flush=True)
-    if not TELEGRAM_API_ID or "YOUR_API_ID" in TELEGRAM_API_ID: return None
+    if not TELEGRAM_API_ID: return None
     try:
         client = TelegramClient('session_name', TELEGRAM_API_ID, TELEGRAM_API_HASH)
+        import asyncio
         async def run():
             await client.start()
             message = await client.get_messages(TELEGRAM_CHANNEL, limit=1)
             return message[0].text
-        # Add timeout here (e.g., 5 seconds)
-        return asyncio.run(asyncio.wait_for(run(), timeout=15))
+        # Add timeout here (e.g., 10 seconds)
+        return asyncio.run(asyncio.wait_for(run(), timeout=10))
     except asyncio.TimeoutError:
         print("Telegram connection timed out. Please use manual entry.", flush=True)
         return None
