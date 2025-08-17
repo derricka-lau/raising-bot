@@ -241,27 +241,21 @@ def main_loop():
     underlying_contract.currency = "USD"
     underlying_contract.exchange = "CBOE"
 
-    # Interactive retry logic for fetching the open price
-    attempt_count = 0
-    while True:
+    # --- SAFER ALTERNATIVE: Retry up to 5 times ---
+    max_attempts = 5
+    for attempt_count in range(1, max_attempts + 1):
         app.underlying_open_price = None  # Reset before request
         app.historical_data_event.clear() # Reset event
-        attempt_count += 1
-        print(f"Attempt {attempt_count} to fetch {UNDERLYING_SYMBOL} open price...")
+        
+        print(f"Attempt {attempt_count}/{max_attempts} to fetch {UNDERLYING_SYMBOL} open price...")
         app.reqHistoricalData(99, underlying_contract, "", "1 D", "1 day", "TRADES", 1, 1, False, [])
         
-        # --- Best Practice: Wait for historical data using an event ---
         app.historical_data_event.wait(10) # Wait up to 10 seconds for data
 
         if app.underlying_open_price is not None:
             break  # Success
-
-        retry_choice = input("Failed to fetch open price. Try again? (y/n): ").lower()
-        if retry_choice != 'y':
-            break  # User chose not to retry
-
-    if not app.underlying_open_price:
-        print(f"Could not get {UNDERLYING_SYMBOL} open price. Please manually transmit orders.")
+    else: # This 'else' belongs to the 'for' loop, runs if the loop finishes without a 'break'
+        print(f"Could not get {UNDERLYING_SYMBOL} open price after {max_attempts} attempts. Please manually transmit orders.")
         app.disconnect()
         return
 
