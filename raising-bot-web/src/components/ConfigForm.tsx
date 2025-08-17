@@ -7,14 +7,14 @@ const ORDER_TYPES = [
 
 const CONFIG_FIELDS = [
   { key: "IBKR_ACCOUNT", label: "IBKR Account Number", required: true },
-  { key: "IBKR_PORT", label: "IBKR Port", required: true },
+  { key: "IBKR_PORT", label: "IBKR Port", required: true, helper: "Live account is 7496, Paper account is 7497, please confirm it yourself" },
   { key: "TELEGRAM_API_ID", label: "Telegram API ID", required: false, helper: "Optional" },
   { key: "TELEGRAM_API_HASH", label: "Telegram API Hash", required: false, helper: "Optional" },
   { key: "TELEGRAM_CHANNEL", label: "Telegram Channel", required: false, helper: "Optional" },
-  { key: "IBKR_HOST", label: "IBKR Host", required: true },
-  { key: "IBKR_CLIENT_ID", label: "IBKR Client ID", required: true },
-  { key: "DEFAULT_ORDER_TYPE", label: "Default Order Type", required: true },
-  { key: "SNAPMID_OFFSET", label: "SnapMid Offset", required: true },
+  { key: "IBKR_HOST", label: "IBKR Host", required: true, helper: "Usually '127.0.0.1'" },
+  { key: "IBKR_CLIENT_ID", label: "IBKR Client ID", required: true, helper: "Just put in a random number" },
+  { key: "DEFAULT_ORDER_TYPE", label: "Default Order Type", required: true, helper: "Choose a valid IBKR order type" },
+  { key: "SNAPMID_OFFSET", label: "SnapMid Offset", required: true, helper: "Offset for SnapMid orders" },
 ];
 
 interface ConfigFormProps {
