@@ -5,11 +5,14 @@ import sys
 import subprocess
 import threading
 import random
+import time
+from collections import deque
 
 CONFIG_FILE = 'config.json'
 MAIN_SCRIPT = 'main.py'
 bot_process = None
-bot_output = []
+bot_output = deque(maxlen=2000)
+_lock = threading.Lock()
 
 # Point to the React build folder
 REACT_DIST = os.path.abspath("./raising-bot-web/dist")
@@ -44,67 +47,137 @@ def load_config():
     return config
 
 def save_config(data):
-    with open(CONFIG_FILE, 'w') as f:
-        json.dump(data, f, indent=4)
+    # Atomic write with simple retry
+    tmp = CONFIG_FILE + ".tmp"
+    last_err = None
+    for i in range(3):
+        try:
+            with open(tmp, 'w') as f:
+                json.dump(data, f, indent=4)
+            os.replace(tmp, CONFIG_FILE)
+            return
+        except Exception as e:
+            last_err = e
+            time.sleep(0.1 * (2 ** i))
+    raise last_err
 
 @app.route("/api/config", methods=["GET", "POST"])
 def config():
     if request.method == "POST":
-        save_config(request.json)
-        return jsonify({"status": "ok"})
+        if not request.is_json:
+            return jsonify({"error": "application/json required"}), 400
+        data = request.get_json(silent=True) or {}
+        # validate fields
+        invalid = [k for k in data if k not in CONFIG_FIELDS]
+        if invalid:
+            return jsonify({"error": f"Invalid field(s): {', '.join(invalid)}"}), 400
+        try:
+            merged = load_config()
+            merged.update({k: str(v) for k, v in data.items()})
+            save_config(merged)
+            return jsonify({"status": "ok"})
+        except Exception as e:
+            return jsonify({"error": f"Failed to save config: {e}"}), 500
     return jsonify(load_config())
+
+def _start_subprocess_with_retry():
+    global bot_process
+    env = os.environ.copy()
+    env["PYTHONUNBUFFERED"] = "1"
+    last_err = None
+    for i in range(3):
+        try:
+            bot_process = subprocess.Popen(
+                [sys.executable, "-u", MAIN_SCRIPT, "--client-id", str(random.randint(100, 999))],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                stdin=subprocess.PIPE,
+                bufsize=1,
+                text=True,
+                encoding="utf-8",
+                errors="ignore",
+                env=env,
+            )
+            return True
+        except Exception as e:
+            last_err = e
+            time.sleep(0.3 * (2 ** i))
+    bot_process = None
+    return False
 
 @app.route("/api/start", methods=["POST"])
 def start_bot():
     global bot_process, bot_output
-    if bot_process is None or bot_process.poll() is not None:
-        bot_output = []
-        # Generate a random client ID to avoid conflicts
-        random_client_id = random.randint(100, 999)
-        bot_process = subprocess.Popen(
-            [sys.executable, MAIN_SCRIPT, '--client-id', str(random_client_id)],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            stdin=subprocess.PIPE,
-            bufsize=1
-        )
-        threading.Thread(target=read_bot_output, daemon=True).start()
+    with _lock:
+        if bot_process is None or bot_process.poll() is not None:
+            bot_output.clear()
+            ok = _start_subprocess_with_retry()
+            if not ok:
+                return jsonify({"status": "failed"}), 500
+            threading.Thread(target=read_bot_output, daemon=True).start()
     return jsonify({"status": "started"})
 
 @app.route("/api/stop", methods=["POST"])
 def stop_bot():
-    global bot_process
-    if bot_process and bot_process.poll() is None:
-        bot_process.terminate()
-        bot_process = None
+    global bot_process, bot_output
+    with _lock:
+        if bot_process and bot_process.poll() is None:
+            try:
+                bot_process.terminate()
+                try:
+                    bot_process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    bot_process.kill()
+                finally:
+                    if bot_process.stdout: bot_process.stdout.close()
+                    if bot_process.stdin: bot_process.stdin.close()
+            finally:
+                bot_process = None
+        # Clear output when stopped
+        bot_output.clear()
     return jsonify({"status": "stopped"})
 
 @app.route("/api/output")
 def get_output():
-    return jsonify({"output": bot_output})
+    with _lock:
+        return jsonify({"output": list(bot_output)})
 
 @app.route("/api/input", methods=["POST"])
 def bot_input():
     global bot_process
-    if bot_process and bot_process.poll() is None:
-        data = request.json.get("input", "")
-        if data:
-            bot_process.stdin.write((data + "\n").encode("utf-8"))
-            bot_process.stdin.flush()
-        return jsonify({"status": "ok"})
+    if not request.is_json:
+        return jsonify({"error": "application/json required"}), 400
+    data = (request.get_json(silent=True) or {}).get("input", "")
+    if not isinstance(data, str) or not data.strip():
+        return jsonify({"error": "Input cannot be empty"}), 400
+    with _lock:
+        if bot_process and bot_process.poll() is None:
+            try:
+                bot_process.stdin.write(data + "\n")
+                bot_process.stdin.flush()
+                return jsonify({"status": "ok"})
+            except Exception as e:
+                return jsonify({"error": f"Failed to send input: {e}"}), 500
     return jsonify({"status": "not_running"})
-
-@app.route("/api/status")
-def bot_status():
-    global bot_process
-    running = bot_process is not None and bot_process.poll() is None
-    return jsonify({"running": running})
 
 def read_bot_output():
     global bot_process, bot_output
-    for line in iter(bot_process.stdout.readline, b''):
-        bot_output.append(line.decode('utf-8', errors='ignore').rstrip())
-    bot_process = None
+    try:
+        assert bot_process and bot_process.stdout
+        for line in iter(bot_process.stdout.readline, ""):
+            with _lock:
+                bot_output.append(line.rstrip())
+    except Exception:
+        pass
+    finally:
+        with _lock:
+            bot_process = None
+
+@app.route("/api/status")
+def bot_status():
+    with _lock:
+        running = bot_process is not None and bot_process.poll() is None
+    return jsonify({"running": running})
 
 # Serve React static files
 @app.route("/", defaults={"path": ""})

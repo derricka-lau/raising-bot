@@ -103,24 +103,20 @@ class IBKRApp(EWrapper, EClient):
 
     def openOrder(self, orderId, contract, order, orderState):
         super().openOrder(orderId, contract, order, orderState)
-        # Store key info for duplicate checking
         order_info = {
             "orderId": orderId,
             "symbol": contract.symbol,
             "secType": contract.secType,
             "order_type": order.orderType,
-            "leg_conIds": [], # We will store conIds instead of strikes
-            "trigger_price": None
+            "leg_conIds": [],
+            "trigger_price": None,
+            "transmit": getattr(order, "transmit", None),  # <-- ADD THIS LINE
         }
         if contract.secType == 'BAG' and contract.comboLegs:
-            # CORRECTED: Get conIds from legs, as strike/right are not populated here.
             order_info["leg_conIds"] = sorted([leg.conId for leg in contract.comboLegs])
-        
         for cond in order.conditions:
-            # Check if it's a price condition before accessing price
             if isinstance(cond, PriceCondition):
                 order_info["trigger_price"] = cond.price
-
         self.open_orders.append(order_info)
 
     def openOrderEnd(self):
