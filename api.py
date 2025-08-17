@@ -61,25 +61,6 @@ def save_config(data):
             time.sleep(0.1 * (2 ** i))
     raise last_err
 
-@app.route("/api/config", methods=["GET", "POST"])
-def config():
-    if request.method == "POST":
-        if not request.is_json:
-            return jsonify({"error": "application/json required"}), 400
-        data = request.get_json(silent=True) or {}
-        # validate fields
-        invalid = [k for k in data if k not in CONFIG_FIELDS]
-        if invalid:
-            return jsonify({"error": f"Invalid field(s): {', '.join(invalid)}"}), 400
-        try:
-            merged = load_config()
-            merged.update({k: str(v) for k, v in data.items()})
-            save_config(merged)
-            return jsonify({"status": "ok"})
-        except Exception as e:
-            return jsonify({"error": f"Failed to save config: {e}"}), 500
-    return jsonify(load_config())
-
 def _start_subprocess_with_retry():
     global bot_process
     env = os.environ.copy()
@@ -104,6 +85,41 @@ def _start_subprocess_with_retry():
             time.sleep(0.3 * (2 ** i))
     bot_process = None
     return False
+
+def read_bot_output():
+    global bot_process, bot_output
+    try:
+        assert bot_process and bot_process.stdout
+        for line in iter(bot_process.stdout.readline, ""):
+            with _lock:
+                bot_output.append(line.rstrip())
+            # Log to file
+            with open("bot_console.log", "a") as f:
+                f.write(line.rstrip() + "\n")
+    except Exception:
+        pass
+    finally:
+        with _lock:
+            bot_process = None
+
+@app.route("/api/config", methods=["GET", "POST"])
+def config():
+    if request.method == "POST":
+        if not request.is_json:
+            return jsonify({"error": "application/json required"}), 400
+        data = request.get_json(silent=True) or {}
+        # validate fields
+        invalid = [k for k in data if k not in CONFIG_FIELDS]
+        if invalid:
+            return jsonify({"error": f"Invalid field(s): {', '.join(invalid)}"}), 400
+        try:
+            merged = load_config()
+            merged.update({k: str(v) for k, v in data.items()})
+            save_config(merged)
+            return jsonify({"status": "ok"})
+        except Exception as e:
+            return jsonify({"error": f"Failed to save config: {e}"}), 500
+    return jsonify(load_config())
 
 @app.route("/api/start", methods=["POST"])
 def start_bot():
@@ -159,19 +175,6 @@ def bot_input():
             except Exception as e:
                 return jsonify({"error": f"Failed to send input: {e}"}), 500
     return jsonify({"status": "not_running"})
-
-def read_bot_output():
-    global bot_process, bot_output
-    try:
-        assert bot_process and bot_process.stdout
-        for line in iter(bot_process.stdout.readline, ""):
-            with _lock:
-                bot_output.append(line.rstrip())
-    except Exception:
-        pass
-    finally:
-        with _lock:
-            bot_process = None
 
 @app.route("/api/status")
 def bot_status():
