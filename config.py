@@ -5,7 +5,7 @@ import os
 
 CONFIG_FILE = 'config.json'
 CONFIG_DEFAULTS = {
-    "IBKR_ACCOUNT": "YOUR_ACCOUNT_NUMBER",
+    "IBKR_ACCOUNT": "",
     "IBKR_PORT": 7496,
     "TELEGRAM_API_ID": "",
     "TELEGRAM_API_HASH": "",
@@ -30,7 +30,7 @@ if os.path.exists(CONFIG_FILE):
 
 IBKR_ACCOUNT = config_data.get("IBKR_ACCOUNT")
 IBKR_PORT = int(config_data.get("IBKR_PORT"))
-TELEGRAM_API_ID = int(config_data.get("TELEGRAM_API_ID"))
+TELEGRAM_API_ID = config_data.get("TELEGRAM_API_ID")
 TELEGRAM_API_HASH = config_data.get("TELEGRAM_API_HASH")
 TELEGRAM_CHANNEL = config_data.get("TELEGRAM_CHANNEL")
 MULTI_SIGNAL_REGEX = config_data.get("MULTI_SIGNAL_REGEX")

@@ -232,6 +232,36 @@ def bot_status():
         running = bot_process is not None and bot_process.poll() is None
     return jsonify({"running": running})
 
+SESSION_FILES = ["session_name.session", "session_name.session-journal"]
+
+def _session_exists():
+    return any(os.path.exists(p) for p in SESSION_FILES)
+
+@app.route("/api/telegram/session", methods=["GET", "DELETE"])
+def telegram_session():
+    # GET: check if a session exists
+    if request.method == "GET":
+        return jsonify({
+            "exists": _session_exists(),
+            "files": [p for p in SESSION_FILES if os.path.exists(p)]
+        })
+
+    # DELETE: clear session files (require bot stopped)
+    global bot_process
+    with _lock:
+        if bot_process and bot_process.poll() is None:
+            return jsonify({"error": "Bot is running. Stop it before clearing session."}), 409
+        removed, errors = [], []
+        for p in SESSION_FILES:
+            try:
+                os.remove(p)
+                removed.append(p)
+            except FileNotFoundError:
+                pass
+            except Exception as e:
+                errors.append(f"{p}: {e}")
+        return jsonify({"status": "ok", "removed": removed, "errors": errors})
+
 # Serve React static files
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")

@@ -4,7 +4,9 @@ import asyncio
 import hashlib
 import re
 import csv
+import os
 from telethon import TelegramClient
+from telethon.errors import SessionPasswordNeededError
 
 from config import (TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_CHANNEL,
                     DEFAULT_ORDER_TYPE, DEFAULT_LIMIT_PRICE, DEFAULT_STOP_PRICE,
@@ -21,25 +23,69 @@ def record_processed(hash_str, filename='processed_signals.txt'):
 
 # --- Signal Input Functions ---
 def get_signal_from_telegram():
-    print("telegram id:", TELEGRAM_API_ID, flush=True)
     print("telegram channel:", TELEGRAM_CHANNEL, flush=True)
     print("Fetching latest signal from Telegram channel...", flush=True)
-    if not TELEGRAM_API_ID: return None
-    try:
-        client = TelegramClient('session_name', TELEGRAM_API_ID, TELEGRAM_API_HASH)
-        import asyncio
-        async def run():
-            await client.start()
+    if not TELEGRAM_API_ID or not TELEGRAM_API_HASH:
+        print("Missing Telegram API credentials.", flush=True)
+        return None
+
+    async def run():
+        session_file = 'session_name.session'
+        
+        # ONLY try client.start() if session file exists AND we can verify it works
+        if os.path.exists(session_file):
+            client = TelegramClient('session_name', int(TELEGRAM_API_ID), TELEGRAM_API_HASH)
+            try:
+                await client.start()
+                # Check if actually logged in
+                if await client.is_user_authorized():
+                    message = await client.get_messages(TELEGRAM_CHANNEL, limit=1)
+                    return message[0].text
+                else:
+                    # Session exists but is invalid, go to manual login
+                    print("Session invalid, manual login required.", flush=True)
+            except Exception as e:
+                print(f"Session failed: {e}", flush=True)
+        
+        # If no session or session failed, do manual login
+        client = await run_manual_login()
+        if client is None:
+            return None
+        try:
             message = await client.get_messages(TELEGRAM_CHANNEL, limit=1)
             return message[0].text
-        # Add timeout here (e.g., 10 seconds)
-        return asyncio.run(asyncio.wait_for(run(), timeout=10))
-    except asyncio.TimeoutError:
-        print("Telegram connection timed out. Please use manual entry.", flush=True)
-        return None
+        except Exception as e:
+            print(f"Failed to fetch messages: {e}", flush=True)
+            return None
+
+    try:
+        return asyncio.run(run())
     except Exception as e:
-        print(f"Could not connect to Telegram: {e}. Please use manual entry.", flush=True)
+        print(f"Telegram fetch/parse error: {e}", flush=True)
         return None
+
+async def run_manual_login():
+    client = TelegramClient('session_name', int(TELEGRAM_API_ID), TELEGRAM_API_HASH)
+    await client.connect()
+    print("Enter your phone number (with country code, e.g. +85265778011):", flush=True)
+    phone_number = input().strip()
+    if not phone_number.startswith('+'):
+        print("Phone number must start with '+'. Please try again.", flush=True)
+        return None
+    sms_req = await client.send_code_request(phone_number, force_sms=False)
+    print("Enter the code sent to your Telegram app", flush=True)
+    code = input().strip()
+    if not code.isdigit():
+        print("Code must be numeric. Please try again.", flush=True)
+        return None
+    try:
+        await client.sign_in(phone_number, code=code, phone_code_hash=sms_req.phone_code_hash)
+    except SessionPasswordNeededError:
+        print("Two-factor authentication is enabled. Please enter your 2FA password:", flush=True)
+        password = input().strip()
+        await client.sign_in(password=password)
+    # Now you are logged in and can fetch messages
+    return client
 
 def round_strike(strike):
     try:
