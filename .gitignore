@@ -1,4 +1,3 @@
-config.py
 .venv
 session_name.session
 session_name.session-journal
@@ -11,3 +10,4 @@ __pycache__/
 build/
 dist/
 bot_console.log
+config.json

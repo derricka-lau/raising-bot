@@ -133,7 +133,8 @@ function App() {
       });
       if (r.ok) setSnackbar({ open: true, message: "Config saved!", severity: "success" });
       else setSnackbar({ open: true, message: "Failed to save config.", severity: "error" });
-    } catch {
+    } catch (e) {
+      console.error("Error saving config:", e);
       setSnackbar({ open: true, message: "Network error saving config.", severity: "error" });
     } finally {
       setSaving(false);

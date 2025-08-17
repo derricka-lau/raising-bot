@@ -31,7 +31,7 @@ def get_signal_from_telegram():
             message = await client.get_messages(TELEGRAM_CHANNEL, limit=1)
             return message[0].text
         # Add timeout here (e.g., 5 seconds)
-        return asyncio.run(asyncio.wait_for(run(), timeout=5))
+        return asyncio.run(asyncio.wait_for(run(), timeout=15))
     except asyncio.TimeoutError:
         print("Telegram connection timed out. Please use manual entry.", flush=True)
         return None

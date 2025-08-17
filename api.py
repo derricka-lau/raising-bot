@@ -20,7 +20,8 @@ app = Flask(__name__, static_folder=REACT_DIST, static_url_path="")
 
 CONFIG_FIELDS = [
     "IBKR_ACCOUNT", "IBKR_PORT", "TELEGRAM_API_ID", "TELEGRAM_API_HASH", "TELEGRAM_CHANNEL",
-    "IBKR_HOST", "IBKR_CLIENT_ID", "UNDERLYING_SYMBOL", "DEFAULT_ORDER_TYPE", "SNAPMID_OFFSET"
+    "IBKR_HOST", "IBKR_CLIENT_ID", "UNDERLYING_SYMBOL", "DEFAULT_ORDER_TYPE", "SNAPMID_OFFSET",
+    "DEFAULT_LIMIT_PRICE", "DEFAULT_STOP_PRICE"
 ]
 
 CONFIG_DEFAULTS = {
@@ -35,6 +36,10 @@ CONFIG_DEFAULTS = {
     "DEFAULT_ORDER_TYPE": "SNAP MID",
     "SNAPMID_OFFSET": "0.1"
 }
+
+VALID_ORDER_TYPES = [
+    "SNAP MID", "LMT", "MKT", "STP", "STP LMT", "REL", "TRAIL", "TRAIL LIMIT"
+]
 
 def load_config():
     config = CONFIG_DEFAULTS.copy()
@@ -108,10 +113,55 @@ def config():
         if not request.is_json:
             return jsonify({"error": "application/json required"}), 400
         data = request.get_json(silent=True) or {}
-        # validate fields
         invalid = [k for k in data if k not in CONFIG_FIELDS]
         if invalid:
             return jsonify({"error": f"Invalid field(s): {', '.join(invalid)}"}), 400
+
+        # Validate required fields
+        required_fields = [
+            "IBKR_ACCOUNT", "IBKR_PORT", "IBKR_HOST", "IBKR_CLIENT_ID", "UNDERLYING_SYMBOL", "DEFAULT_ORDER_TYPE", "SNAPMID_OFFSET"
+        ]
+        missing = [k for k in required_fields if not str(data.get(k, "")).strip()]
+        if missing:
+            return jsonify({"error": f"Missing required field(s): {', '.join(missing)}"}), 400
+
+        # Validate order type
+        order_type = data.get("DEFAULT_ORDER_TYPE", "").strip().upper()
+        if order_type and order_type not in VALID_ORDER_TYPES:
+            return jsonify({"error": f"Invalid DEFAULT_ORDER_TYPE: {order_type}. Allowed: {', '.join(VALID_ORDER_TYPES)}"}), 400
+
+        # Require limit/stop price for certain order types
+        if order_type == "LMT" and not str(data.get("DEFAULT_LIMIT_PRICE", "")).strip():
+            return jsonify({"error": "Limit price required for LMT order type"}), 400
+        if order_type == "STP" and not str(data.get("DEFAULT_STOP_PRICE", "")).strip():
+            return jsonify({"error": "Stop price required for STP order type"}), 400
+        if order_type == "STP LMT":
+            if not str(data.get("DEFAULT_LIMIT_PRICE", "")).strip() or not str(data.get("DEFAULT_STOP_PRICE", "")).strip():
+                return jsonify({"error": "Both limit and stop price required for STP LMT order type"}), 400
+        # Add similar checks for TRAIL/TRAIL LIMIT if you support them
+
+        # Additional validation for numeric fields
+        def is_float(val):
+            try:
+                float(val)
+                return True
+            except Exception:
+                return False
+
+        def is_int(val):
+            try:
+                int(val)
+                return True
+            except Exception:
+                return False
+
+        if order_type == "LMT" and not is_float(data.get("DEFAULT_LIMIT_PRICE", "")):
+            return jsonify({"error": "Limit price must be a number for LMT order type"}), 400
+        if order_type == "STP" and not is_float(data.get("DEFAULT_STOP_PRICE", "")):
+            return jsonify({"error": "Stop price must be a number for STP order type"}), 400
+        if order_type == "SNAP MID" and not is_float(data.get("SNAPMID_OFFSET", "")):
+            return jsonify({"error": "SnapMid Offset must be a number for SNAP MID order type"}), 400
+
         try:
             merged = load_config()
             merged.update({k: str(v) for k, v in data.items()})
