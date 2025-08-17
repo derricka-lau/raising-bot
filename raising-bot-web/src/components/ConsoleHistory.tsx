@@ -2,7 +2,7 @@ import React from "react";
 import { Box, Typography } from "@mui/material";
 
 interface ConsoleHistoryProps {
-  output: { text: string; fromUser?: boolean }[];
+  output: string[];
 }
 
 const ConsoleHistory: React.FC<ConsoleHistoryProps> = ({ output }) => (
@@ -25,21 +25,9 @@ const ConsoleHistory: React.FC<ConsoleHistoryProps> = ({ output }) => (
       {output.length === 0 ? (
         <Typography color="grey.600">No history yet.</Typography>
       ) : (
-        output.map((msg, i) => (
-          <Box
-            key={i}
-            sx={{
-              mb: 1,
-              alignSelf: msg.fromUser ? "flex-end" : "flex-start",
-              background: msg.fromUser ? "#bbf7d0" : "#e3f2fd",
-              px: 2,
-              py: 1,
-              borderRadius: 2,
-              fontFamily: "monospace",
-              fontSize: 15,
-            }}
-          >
-            {msg.text}
+        output.map((line, i) => (
+          <Box key={i} sx={{ mb: 1 }}>
+            {line}
           </Box>
         ))
       )}

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 import pytz
 import asyncio
 import argparse # 1. Import argparse
+import json
 
 from config import (IBKR_HOST, IBKR_PORT, IBKR_CLIENT_ID, 
                     UNDERLYING_SYMBOL, IBKR_ACCOUNT, SNAPMID_OFFSET)
@@ -172,7 +173,7 @@ def main_loop():
         time.sleep(10)
 
     for signal_data in signals_to_process:
-        print(f"Processing signal: {signal_data}")
+        print(f"Processing signal: {json.dumps(signal_data)}")
         
         # --- Get conIds for the new signal's legs FIRST ---
         try:

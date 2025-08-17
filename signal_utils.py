@@ -54,9 +54,13 @@ def parse_multi_signal_message(text):
             lc_str = round_strike(match.group(3))
             trigger_midpoint = (float(sc_str) + float(lc_str)) / 2.0
             signals.append({
-                "expiry": expiry, "sc_strike": sc_str, "lc_strike": lc_str, 
+                "expiry": expiry,
+                "sc_strike": sc_str,
+                "lc_strike": lc_str,  # <-- fix here
                 "trigger_price": str(trigger_midpoint),
-                "order_type": DEFAULT_ORDER_TYPE, "lmt_price": DEFAULT_LIMIT_PRICE, "stop_price": DEFAULT_STOP_PRICE
+                "order_type": DEFAULT_ORDER_TYPE,
+                "lmt_price": DEFAULT_LIMIT_PRICE,
+                "stop_price": DEFAULT_STOP_PRICE
             })
         except (ValueError, IndexError):
             print(f"Warning: Skipping an invalid line in message: {match.group(0)}")
@@ -88,7 +92,8 @@ def get_signal_interactively():
     print("  2. Enter details for one or more trades one-by-one.")
     
     while True:
-        choice = input("Please choose an option (1 or 2): ").strip()
+        print("Please choose an option (1 or 2):", flush=True)
+        choice = input().strip()
         if choice == '1':
             pasted_text = input("\nPaste the full telegram signal message:\n> ")
             if pasted_text.strip():

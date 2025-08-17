@@ -4,10 +4,12 @@ import ConfigForm from "./components/ConfigForm";
 import BotConsole from "./components/BotConsole";
 import ConsoleHistory from "./components/ConsoleHistory";
 
+
+
 function App() {
   const [tab, setTab] = useState(0);
   const [config, setConfig] = useState<Record<string, string>>({});
-  const [output, setOutput] = useState<{ text: string; fromUser?: boolean }[]>([]);
+  const [output, setOutput] = useState<string[]>([]);
   const [botRunning, setBotRunning] = useState(false);
   const [botLoading, setBotLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -27,7 +29,7 @@ function App() {
     const interval = setInterval(() => {
       fetch("/api/output")
         .then((r) => r.json())
-        .then((data) => setOutput(data.output.map((text: string) => ({ text }))));
+        .then((data) => setOutput(data.output));
     }, 1000);
 
     return () => clearInterval(interval);
@@ -69,7 +71,6 @@ function App() {
     setBotRunning(false);
   };
   const sendInput = async () => {
-    setOutput(prev => [...prev, { text: inputValue, fromUser: true }]);
     await fetch("/api/input", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

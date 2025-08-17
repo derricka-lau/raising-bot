@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from "react";
 import { Box, Typography, Stack, Button, CircularProgress, TextField } from "@mui/material";
 
 interface BotConsoleProps {
-  output: { text: string; fromUser?: boolean }[];
+  output: string[];
   botRunning: boolean;
   botLoading: boolean;
   startBot: () => void;
@@ -88,36 +88,29 @@ const BotConsole: React.FC<BotConsoleProps> = ({
           <Typography color="grey.600">No output yet.</Typography>
         ) : (
           <>
-            {output.map((msg, i) => {
-              if (msg.fromUser) {
-                // User message: align right, green bubble
-                return (
-                  <Box
-                    key={i}
-                    sx={{
-                      maxWidth: "80%",
-                      alignSelf: "flex-end",
-                      background: "#bbf7d0",
-                      color: "#222",
-                      px: 2,
-                      py: 1,
-                      borderRadius: 2,
-                      mb: 1,
-                      boxShadow: 1,
-                      fontFamily: "monospace",
-                      fontSize: 15,
-                    }}
-                  >
-                    {msg.text}
-                  </Box>
-                );
+            {output.map((line, i) => {
+              // Detect and format signal lines
+              if (line.startsWith("Processing signal: ")) {
+                try {
+                  const jsonStr = line.replace("Processing signal: ", "");
+                  const signal = JSON.parse(jsonStr);
+                  return (
+                    <Box key={i} sx={bubbleStyle}>
+                      <strong>Processing signal:</strong><br />
+                      • Expiry: {signal.expiry}<br />
+                      • Long Call Strike: {signal.lc_strike}<br />
+                      • Short Call Strike: {signal.sc_strike}<br />
+                      • Trigger Price: {signal.trigger_price}<br />
+                      • Order Type: {signal.order_type}
+                    </Box>
+                  );
+                } catch {
+                  // fallback to raw line
+                  return <Box key={i} sx={bubbleStyle}>{line}</Box>;
+                }
               }
-              // Bot message: align left, blue bubble
-              return (
-                <Box key={i} sx={bubbleStyle}>
-                  {msg.text}
-                </Box>
-              );
+              // Default: regular line
+              return <Box key={i} sx={bubbleStyle}>{line}</Box>;
             })}
             <div ref={endRef} />
           </>
