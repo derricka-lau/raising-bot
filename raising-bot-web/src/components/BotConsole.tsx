@@ -1,5 +1,5 @@
-import React, { useRef, useEffect } from "react";
-import { Box, Typography, Stack, Button, CircularProgress, TextField } from "@mui/material";
+import React, { useRef, useEffect, useState } from "react";
+import { Box, Button, Typography, TextField } from "@mui/material";
 
 interface BotConsoleProps {
   output: string[];
@@ -24,6 +24,9 @@ const BotConsole: React.FC<BotConsoleProps> = ({
 }) => {
   const endRef = useRef<HTMLDivElement>(null);
   const prevLengthRef = useRef<number>(output.length);
+  const [sessionExists, setSessionExists] = useState<boolean | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const [hasTelegramConfig, setHasTelegramConfig] = useState(false); // NEW
 
   useEffect(() => {
     if (output.length > prevLengthRef.current && endRef.current) {
@@ -31,6 +34,58 @@ const BotConsole: React.FC<BotConsoleProps> = ({
     }
     prevLengthRef.current = output.length;
   }, [output]);
+
+  // Load config to see if Telegram is configured
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const r = await fetch("/api/config");
+        if (!r.ok) return;
+        const d = await r.json();
+        const id = (d?.TELEGRAM_API_ID ?? "").toString().trim();
+        setHasTelegramConfig(!!id);
+      } catch { /* ignore */ }
+    };
+    load();
+  }, []);
+
+  // Check current telegram session presence only if Telegram is configured
+  useEffect(() => {
+    if (!hasTelegramConfig) {
+      setSessionExists(null);
+      return;
+    }
+    const check = async () => {
+      try {
+        const r = await fetch("/api/telegram/session");
+        if (r.ok) {
+          const d = await r.json();
+          setSessionExists(!!d.exists);
+        }
+      } catch { /* ignore */ }
+    };
+    check();
+  }, [hasTelegramConfig]);
+
+  const clearTelegramSession = async () => {
+    if (!hasTelegramConfig) return;
+    if (botRunning || botLoading) return;
+    if (!window.confirm("Clear Telegram session? You will need to login again.")) return;
+    setClearing(true);
+    try {
+      const r = await fetch("/api/telegram/session", { method: "DELETE" });
+      if (r.ok) {
+        setSessionExists(false);
+      } else {
+        const d = await r.json().catch(() => ({}));
+        alert(d.error || "Failed to clear session.");
+      }
+    } catch {
+      alert("Network error clearing session.");
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const bubbleStyle = {
     maxWidth: "80%",
@@ -51,25 +106,34 @@ const BotConsole: React.FC<BotConsoleProps> = ({
       <Typography variant="h6" gutterBottom>
         Bot Console
       </Typography>
-      <Stack direction="row" spacing={2} sx={{ mb: 2 }}>
-        <Button
-          variant="contained"
-          color="success"
-          onClick={startBot}
-          disabled={botRunning || botLoading}
-        >
+
+      <Box sx={{ display: "flex", gap: 1, mb: 2 }}>
+        <Button variant="contained" disabled={botRunning || botLoading} onClick={startBot}>
           Start Bot
         </Button>
-        <Button
-          variant="contained"
-          color="error"
-          onClick={stopBot}
-          disabled={!botRunning || botLoading}
-        >
+        <Button color="error" variant="contained" disabled={!botRunning || botLoading} onClick={stopBot}>
           Stop Bot
         </Button>
-        {botLoading && <CircularProgress size={24} sx={{ ml: 2 }} />}
-      </Stack>
+
+        {hasTelegramConfig && (
+          <>
+            <Button
+              variant="outlined"
+              disabled={botRunning || botLoading || clearing}
+              onClick={clearTelegramSession}
+              title={botRunning ? "Stop the bot before clearing the session" : "Clear Telegram session"}
+            >
+              {clearing ? "Clearing..." : "Clear Telegram Session"}
+            </Button>
+            {sessionExists === false && (
+              <Typography sx={{ ml: 1, alignSelf: "center" }} color="warning.main">
+                No Telegram session found — first run will ask to login.
+              </Typography>
+            )}
+          </>
+        )}
+      </Box>
+
       <Box
         sx={{
           background: "#f5f5f5",
