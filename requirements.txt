@@ -1,5 +1,9 @@
 certifi==2025.1.31
+flask
 ibapi==9.81.1.post1
 pytz==2025.2
 wheel
 telethon
+pyaes
+rsa
+pyasn1

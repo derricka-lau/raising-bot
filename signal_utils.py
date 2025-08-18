@@ -4,12 +4,13 @@ import asyncio
 import hashlib
 import re
 import csv
+import os
 from telethon import TelegramClient
+from telethon.errors import SessionPasswordNeededError
 
 from config import (TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_CHANNEL,
                     DEFAULT_ORDER_TYPE, DEFAULT_LIMIT_PRICE, DEFAULT_STOP_PRICE,
-                    UNDERLYING_SYMBOL, CSV_FILE_PATH, CSV_COLUMN_MAPPING,
-                    CSV_STATUS_COLUMN, CSV_PENDING_VALUE, MULTI_SIGNAL_REGEX)
+                    UNDERLYING_SYMBOL, MULTI_SIGNAL_REGEX)
 
 # --- Hash and Record-Keeping Functions (Unchanged) ---
 def get_signal_hash(text): return hashlib.sha256(text.encode()).hexdigest()
@@ -22,22 +23,69 @@ def record_processed(hash_str, filename='processed_signals.txt'):
 
 # --- Signal Input Functions ---
 def get_signal_from_telegram():
-    print("Fetching latest signal from Telegram channel...")
-    if not TELEGRAM_API_ID or "YOUR_API_ID" in TELEGRAM_API_ID: return None
-    try:
-        client = TelegramClient('session_name', TELEGRAM_API_ID, TELEGRAM_API_HASH)
-        async def run():
-            await client.start()
+    print("telegram channel:", TELEGRAM_CHANNEL, flush=True)
+    print("Fetching latest signal from Telegram channel...", flush=True)
+    if not TELEGRAM_API_ID or not TELEGRAM_API_HASH:
+        print("Missing Telegram API credentials.", flush=True)
+        return None
+
+    async def run():
+        session_file = 'session_name.session'
+        
+        # ONLY try client.start() if session file exists AND we can verify it works
+        if os.path.exists(session_file):
+            client = TelegramClient('session_name', int(TELEGRAM_API_ID), TELEGRAM_API_HASH)
+            try:
+                await client.start()
+                # Check if actually logged in
+                if await client.is_user_authorized():
+                    message = await client.get_messages(TELEGRAM_CHANNEL, limit=1)
+                    return message[0].text
+                else:
+                    # Session exists but is invalid, go to manual login
+                    print("Session invalid, manual login required.", flush=True)
+            except Exception as e:
+                print(f"Session failed: {e}", flush=True)
+        
+        # If no session or session failed, do manual login
+        client = await run_manual_login()
+        if client is None:
+            return None
+        try:
             message = await client.get_messages(TELEGRAM_CHANNEL, limit=1)
             return message[0].text
-        # Add timeout here (e.g., 5 seconds)
-        return asyncio.run(asyncio.wait_for(run(), timeout=5))
-    except asyncio.TimeoutError:
-        print("Telegram connection timed out. Please use manual entry.")
-        return None
+        except Exception as e:
+            print(f"Failed to fetch messages: {e}", flush=True)
+            return None
+
+    try:
+        return asyncio.run(run())
     except Exception as e:
-        print(f"Could not connect to Telegram: {e}. Please use manual entry.")
+        print(f"Telegram fetch/parse error: {e}", flush=True)
         return None
+
+async def run_manual_login():
+    client = TelegramClient('session_name', int(TELEGRAM_API_ID), TELEGRAM_API_HASH)
+    await client.connect()
+    print("Enter your phone number (with country code, e.g. +85265778011):", flush=True)
+    phone_number = input().strip()
+    if not phone_number.startswith('+'):
+        print("Phone number must start with '+'. Please try again.", flush=True)
+        return None
+    sms_req = await client.send_code_request(phone_number, force_sms=False)
+    print("Enter the code sent to your Telegram app", flush=True)
+    code = input().strip()
+    if not code.isdigit():
+        print("Code must be numeric. Please try again.", flush=True)
+        return None
+    try:
+        await client.sign_in(phone_number, code=code, phone_code_hash=sms_req.phone_code_hash)
+    except SessionPasswordNeededError:
+        print("Two-factor authentication is enabled. Please enter your 2FA password:", flush=True)
+        password = input().strip()
+        await client.sign_in(password=password)
+    # Now you are logged in and can fetch messages
+    return client
 
 def round_strike(strike):
     try:
@@ -54,77 +102,30 @@ def parse_multi_signal_message(text):
             lc_str = round_strike(match.group(3))
             trigger_midpoint = (float(sc_str) + float(lc_str)) / 2.0
             signals.append({
-                "expiry": expiry, "sc_strike": sc_str, "lc_strike": lc_str, 
+                "expiry": expiry,
+                "sc_strike": sc_str,
+                "lc_strike": lc_str,  # <-- fix here
                 "trigger_price": str(trigger_midpoint),
-                "order_type": DEFAULT_ORDER_TYPE, "lmt_price": DEFAULT_LIMIT_PRICE, "stop_price": DEFAULT_STOP_PRICE
+                "order_type": DEFAULT_ORDER_TYPE,
+                "lmt_price": DEFAULT_LIMIT_PRICE,
+                "stop_price": DEFAULT_STOP_PRICE
             })
         except (ValueError, IndexError):
-            print(f"Warning: Skipping an invalid line in message: {match.group(0)}")
+            print(f"Warning: Skipping an invalid line in message: {match.group(0)}", flush=True)
             continue
     return signals if signals else None
 
-def get_signals_from_csv():
-    if not CSV_FILE_PATH: return None
-    signals = []
-    try:
-        with open(CSV_FILE_PATH, mode='r', encoding='utf-8') as infile:
-            reader = csv.DictReader(infile)
-            for row in reader:
-                if row.get(CSV_STATUS_COLUMN) == CSV_PENDING_VALUE:
-                    try:
-                        expiry = row[CSV_COLUMN_MAPPING["expiry"]].replace('-', '')
-                        lc = round_strike(row[CSV_COLUMN_MAPPING["lc_strike"]])
-                        sc = round_strike(row[CSV_COLUMN_MAPPING["sc_strike"]])
-                        trigger = row[CSV_COLUMN_MAPPING["trigger_price"]]
-                        signals.append({"expiry": expiry, "sc_strike": sc, "lc_strike": lc, "trigger_price": trigger, "order_type": DEFAULT_ORDER_TYPE, "lmt_price": DEFAULT_LIMIT_PRICE, "stop_price": DEFAULT_STOP_PRICE})
-                    except (KeyError, ValueError): continue
-        return signals if signals else None
-    except FileNotFoundError: return None
-
 def get_signal_interactively():
     """Presents a menu for manual signal entry."""
-    print("\n--- MANUAL SIGNAL ENTRY ---")
-    print("  1. Paste the full multi-signal message.")
-    print("  2. Enter details for one or more trades one-by-one.")
-    
-    while True:
-        choice = input("Please choose an option (1 or 2): ").strip()
-        if choice == '1':
-            pasted_text = input("\nPaste message here in ONE line and press Enter:\n> ")
-            if pasted_text.strip():
-                parsed_signals = parse_multi_signal_message(pasted_text)
-                if parsed_signals:
-                    print(f"Parsed {len(parsed_signals)} signal(s) successfully from pasted text.")
-                    return parsed_signals
-                else:
-                    print("\nCould not find any valid, untriggered signals in the pasted message.")
-            else: print("No message pasted.")
-        
-        elif choice == '2':
-            # --- NEW: Loop for multiple single entries ---
-            manual_signals = []
-            while True:
-                print("\n--- Entering details for a trade ---")
-                try:
-                    tp = float(input(f"Enter {UNDERLYING_SYMBOL} Trigger Price: "))
-                    ed = input("Enter Expiry Date (YYYY-MM-DD): ")
-                    ls = float(input("Enter Long Call (LC) Strike: "))
-                    ss = float(input("Enter Short Call (SC) Strike: "))
-                    ot_in = input(f"Enter Order Type [default: {DEFAULT_ORDER_TYPE}]: ").strip().upper()
-                    ot = ot_in if ot_in else DEFAULT_ORDER_TYPE
-                    lp, sp = None, None
-                    if ot == 'LMT': lp = float(input("Enter Limit Price: "))
-                    elif ot == 'STP': sp = float(input("Enter Stop Price: "))
-                    elif ot == 'STP LMT': sp = float(input("Enter Stop Price: ")); lp = float(input("Enter Limit Price: "))
-                    
-                    signal_data = {"expiry": ed.replace('-', ''), "sc_strike": str(ss), "lc_strike": str(ls), "trigger_price": str(tp), "order_type": ot, "lmt_price": lp, "stop_price": sp}
-                    manual_signals.append(signal_data)
-                except ValueError:
-                    print("Invalid input. Please try this trade again.")
+    print("--- MANUAL SIGNAL ENTRY ---", flush=True)
+    print("Paste the full telegram signal message:", flush=True)
+    pasted_text = input().strip()
+    if pasted_text:
+        parsed_signals = parse_multi_signal_message(pasted_text)
+        if parsed_signals:
+            print(f"Parsed {len(parsed_signals)} signal(s) successfully from pasted text.", flush=True)
+            return parsed_signals
+        else:
+            print("Could not find any valid, untriggered signals in the pasted message.", flush=True)
+    else: print("No message pasted.", flush=True)
 
-                if input("\nAdd another trade manually? (y/n): ").lower() != 'y':
-                    break # Exit the inner loop
-            
-            return manual_signals
-
-        else: print("Invalid choice. Please enter 1 or 2.")
