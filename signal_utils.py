@@ -118,7 +118,18 @@ def parse_multi_signal_message(text):
 def get_signal_interactively():
     """Presents a menu for manual signal entry."""
     print("--- MANUAL SIGNAL ENTRY ---", flush=True)
-    print("Paste the full telegram signal message:", flush=True)
+    
+    # Add the user-friendly explanation here
+    print(
+        "Please paste the full Telegram message.\n"
+        "The message can contain multiple lines, but each valid signal must contain:\n"
+        "到期日: YYYY-MM-DD SC: [STRIKE_PRICE] LC: [STRIKE_PRICE] ...other text... 未觸發 ...other text...\n"
+        "Here is an example of a valid line:\n"
+        "到期日: 2025-08-22 SC: 6500 LC: 6495 ...other text... 未觸發 ...other text...\n"
+        "The bot will automatically calculate the trigger price as the midpoint of the strikes.\n"
+        "Please paste the full Telegram message:"
+    , flush=True)
+
     pasted_text = input().strip()
     if pasted_text:
         parsed_signals = parse_multi_signal_message(pasted_text)
