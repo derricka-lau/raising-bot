@@ -4,6 +4,7 @@ import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import ConfigForm from "./components/ConfigForm";
 import BotConsole from "./components/BotConsole";
 import ConsoleHistory from "./components/ConsoleHistory";
+import { io, Socket } from "socket.io-client";
 
 function App() {
   const [tab, setTab] = useState(1);
@@ -76,38 +77,17 @@ function App() {
       }
     };
 
-    // Output polling with backoff
-    let cancelled = false;
-    let timeoutId: number | undefined;
-    let delay = 1000;
+    // Replace polling with socket.io
+    const socket: Socket = io("http://127.0.0.1:9527");
+    socket.on("output", (data: { line: string }) => {
+      setOutput(prev => [...prev, data.line]);
+    });
 
-    const poll = async () => {
-      try {
-        const r = await fetch("/api/output");
-        if (!r.ok) throw new Error("Output HTTP error");
-        const data: { output?: string[] } = await r.json();
-        if (!cancelled) {
-          setOutput(data.output ?? []);
-        }
-        delay = 1000;
-      } catch (e) {
-        if (!isAbortError(e)) {
-          // exponential backoff up to 15s
-          delay = Math.min(delay * 2, 15000);
-        }
-      } finally {
-        if (!cancelled) {
-          timeoutId = window.setTimeout(poll, delay);
-        }
-      }
-    };
-
-    init().then(() => poll());
+    init();
     return () => {
       mounted = false;
-      cancelled = true;
       controller.abort();
-      if (timeoutId) clearTimeout(timeoutId);
+      socket.disconnect();
     };
   }, []);
 

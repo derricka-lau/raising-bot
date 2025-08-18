@@ -5,6 +5,7 @@ import threading
 import print_utils
 from collections import deque
 from flask import Flask, request, jsonify, send_from_directory # <-- Make sure send_from_directory is imported
+from flask_socketio import SocketIO, emit
 import json
 import subprocess
 import random
@@ -56,6 +57,7 @@ REACT_DIST = resource_path("raising-bot-web/dist")
 
 # --- UPDATE FLASK APP DEFINITION ---
 app = Flask(__name__, static_folder=REACT_DIST, static_url_path="")
+socketio = SocketIO(app, cors_allowed_origins="*")
 
 CONFIG_FIELDS = [
     "IBKR_ACCOUNT", "IBKR_PORT", "TELEGRAM_API_ID", "TELEGRAM_API_HASH", "TELEGRAM_CHANNEL",
@@ -157,25 +159,22 @@ def read_bot_output():
             stripped = re.sub(r'^\[TS:[^\]]+\]\s*', '', raw)
             is_countdown = stripped.startswith("Waiting for market open:")
 
-            # Keep the raw line in the in-memory output (for UI)
             with _lock:
                 if is_countdown:
-                    # If the last message was also a countdown, replace it.
-                    # Otherwise, append the new one.
                     if bot_output and bot_output[-1].lstrip().startswith("[TS:") and "Waiting for market open:" in bot_output[-1]:
-                         bot_output[-1] = raw
+                        bot_output[-1] = raw
                     else:
                         bot_output.append(raw)
                 else:
                     bot_output.append(raw)
+            # Emit the new line to all connected clients
+            socketio.emit("output", {"line": raw})
 
-            # Write to log file (no change to logging logic)
             if not is_countdown:
                 try:
                     with open(LOG_FILE, "a") as f:
                         f.write(raw + "\n")
                 except Exception:
-                    # If logging fails, don't crash the reader thread
                     pass
     except Exception:
         pass
@@ -362,25 +361,16 @@ def open_browser():
     webbrowser.open_new_tab("http://127.0.0.1:9527")
 
 if __name__ == "__main__":
-    # --- THIS IS THE CRITICAL CHANGE ---
-    # We use argparse to see if the script was launched with the special flag.
     parser = argparse.ArgumentParser()
     parser.add_argument("--run-main", action="store_true", help="Run the main_loop for the bot subprocess.")
-    # Allow other args to pass through to main.py
     args, unknown = parser.parse_known_args()
 
     if args.run_main:
-        # If --run-main is present, we are in a subprocess.
-        # Import and run the bot logic, then exit.
-        # DO NOT start a Flask server.
         from main import main_loop
-        # Re-inject the unknown args so main.py's parser can see them
         sys.argv = [sys.argv[0]] + unknown
         main_loop()
     else:
-        # If --run-main is NOT present, this is the main GUI app.
-        # Start the Flask server and open the browser as normal.
         if getattr(sys, 'frozen', False):
             threading.Timer(1.5, open_browser).start()
-        
-        app.run(host='127.0.0.1', port=9527, debug=False)
+        # Use socketio.run instead of app.run
+        socketio.run(app, host='127.0.0.1', port=9527, debug=False)
