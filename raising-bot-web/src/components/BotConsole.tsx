@@ -173,7 +173,8 @@ const BotConsole: React.FC<BotConsoleProps> = ({
         ref={consoleRef}
         sx={{
           background: "#f5f5f5",
-          maxHeight: '400px',
+          height: '400px',
+          width: "800px",
           overflowY: "auto",
           p: 2,
           borderRadius: 2,

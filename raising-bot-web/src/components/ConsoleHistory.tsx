@@ -1,16 +1,14 @@
-import React, { useMemo } from "react";
+import React from "react";
 import { Box, Typography } from "@mui/material";
-import { stripTimestamp, dedupeCountdowns } from "../utils/consoleUtils";
+import { stripTimestamp } from "../utils/consoleUtils";
 
 interface ConsoleHistoryProps {
   output: string[];
 }
 
 const ConsoleHistory: React.FC<ConsoleHistoryProps> = ({ output }) => {
-  // Deduplicate countdowns and strip timestamps
-  const dedupedOutput = useMemo(() => dedupeCountdowns(output), [output]);
   // Remove countdown lines from history (keep only non-countdown lines)
-  const filteredOutput = dedupedOutput.filter(
+  const filteredOutput = output.filter(
     (line) => !stripTimestamp(line).startsWith("Waiting for market open:")
   );
 
@@ -22,7 +20,7 @@ const ConsoleHistory: React.FC<ConsoleHistoryProps> = ({ output }) => {
       <Box
         sx={{
           background: "#fafafa",
-          height: 1000,
+          width: "800px",
           overflowY: "auto",
           p: 2,
           borderRadius: 2,
@@ -36,7 +34,7 @@ const ConsoleHistory: React.FC<ConsoleHistoryProps> = ({ output }) => {
         ) : (
           filteredOutput.map((line, i) => (
             <Box key={i} sx={{ mb: 1 }}>
-              {stripTimestamp(line)}
+              {line}
             </Box>
           ))
         )}
