@@ -1,21 +1,58 @@
-from flask import Flask, request, jsonify
-import json
 import os
 import sys
-import subprocess
+import webbrowser
 import threading
+from collections import deque
+from flask import Flask, request, jsonify, send_from_directory # <-- Make sure send_from_directory is imported
+import json
+import subprocess
 import random
 import time
-from collections import deque
+from pathlib import Path # <-- Add this import
+import argparse # <-- Add this import
 
-CONFIG_FILE = 'config.json'
-MAIN_SCRIPT = 'main.py'
-bot_process = None
-bot_output = deque(maxlen=2000)
+# --- INITIALIZE GLOBAL VARIABLES HERE ---
 _lock = threading.Lock()
+bot_process = None
+bot_output = deque(maxlen=1000)
+# --- END INITIALIZATION ---
 
-# Point to the React build folder
-REACT_DIST = os.path.abspath("./raising-bot-web/dist")
+# --- HELPER FUNCTIONS (resource_path is unchanged) ---
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
+def get_user_data_dir():
+    """Get a writable directory for user data (config, logs, session)."""
+    if sys.platform == "win32":
+        path = Path(os.getenv("APPDATA")) / "RaisingBot"
+    else: # macOS and other Unix-like
+        path = Path.home() / "Library" / "Application Support" / "RaisingBot"
+    path.mkdir(parents=True, exist_ok=True)
+    return str(path)
+# --- END HELPER FUNCTIONS ---
+
+
+# --- UPDATE ALL FILE PATHS ---
+USER_DATA_DIR = get_user_data_dir()
+# User-specific config is now in a writable location
+CONFIG_FILE = os.path.join(USER_DATA_DIR, 'config.json')
+# The default config is still bundled with the app
+DEFAULT_CONFIG_FILE = resource_path('config.json')
+# Session files also go in the user data directory
+SESSION_FILES = [os.path.join(USER_DATA_DIR, "session_name.session"), os.path.join(USER_DATA_DIR, "session_name.session-journal")]
+# Log file also goes in the user data directory
+LOG_FILE = os.path.join(USER_DATA_DIR, "bot_console.log")
+
+MAIN_SCRIPT = resource_path('main.py')
+REACT_DIST = resource_path("raising-bot-web/dist")
+# --- END PATH UPDATES ---
+
+# --- UPDATE FLASK APP DEFINITION ---
 app = Flask(__name__, static_folder=REACT_DIST, static_url_path="")
 
 CONFIG_FIELDS = [
@@ -41,15 +78,23 @@ VALID_ORDER_TYPES = [
     "SNAP MID", "LMT", "MKT", "STP", "STP LMT", "REL", "TRAIL", "TRAIL LIMIT"
 ]
 
+# --- UPDATE CONFIG LOADING LOGIC ---
 def load_config():
+    # If user config doesn't exist, create it from the default bundled with the app
+    if not os.path.exists(CONFIG_FILE) and os.path.exists(DEFAULT_CONFIG_FILE):
+        import shutil
+        shutil.copy(DEFAULT_CONFIG_FILE, CONFIG_FILE)
+
     config = CONFIG_DEFAULTS.copy()
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE) as f:
             try:
                 config.update(json.load(f))
             except Exception:
-                pass
+                pass # If file is corrupt, we'll use defaults
     return config
+
+# `save_config` is now fine because CONFIG_FILE points to a writable location.
 
 def save_config(data):
     # Atomic write with simple retry
@@ -71,10 +116,15 @@ def _start_subprocess_with_retry():
     env = os.environ.copy()
     env["PYTHONUNBUFFERED"] = "1"
     last_err = None
+
+    # This command will now correctly run ONLY the main_loop in a subprocess.
+    # It calls the main executable but tells it to run in a different mode.
+    command = [sys.executable, "--run-main", "--client-id", str(random.randint(100, 999))]
+
     for i in range(3):
         try:
             bot_process = subprocess.Popen(
-                [sys.executable, "-u", MAIN_SCRIPT, "--client-id", str(random.randint(100, 999))],
+                command,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 stdin=subprocess.PIPE,
@@ -98,8 +148,8 @@ def read_bot_output():
         for line in iter(bot_process.stdout.readline, ""):
             with _lock:
                 bot_output.append(line.rstrip())
-            # Log to file
-            with open("bot_console.log", "a") as f:
+            # Log to the correct writable file
+            with open(LOG_FILE, "a") as f:
                 f.write(line.rstrip() + "\n")
     except Exception:
         pass
@@ -232,8 +282,6 @@ def bot_status():
         running = bot_process is not None and bot_process.poll() is None
     return jsonify({"running": running})
 
-SESSION_FILES = ["session_name.session", "session_name.session-journal"]
-
 def _session_exists():
     return any(os.path.exists(p) for p in SESSION_FILES)
 
@@ -271,5 +319,31 @@ def serve(path):
     else:
         return app.send_static_file("index.html")
 
+# --- ADD THIS BROWSER-OPENING LOGIC AT THE VERY END ---
+def open_browser():
+    # Opens the browser to your app after a short delay
+    webbrowser.open_new_tab("http://127.0.0.1:5001")
+
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    # --- THIS IS THE CRITICAL CHANGE ---
+    # We use argparse to see if the script was launched with the special flag.
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--run-main", action="store_true", help="Run the main_loop for the bot subprocess.")
+    # Allow other args to pass through to main.py
+    args, unknown = parser.parse_known_args()
+
+    if args.run_main:
+        # If --run-main is present, we are in a subprocess.
+        # Import and run the bot logic, then exit.
+        # DO NOT start a Flask server.
+        from main import main_loop
+        # Re-inject the unknown args so main.py's parser can see them
+        sys.argv = [sys.argv[0]] + unknown
+        main_loop()
+    else:
+        # If --run-main is NOT present, this is the main GUI app.
+        # Start the Flask server and open the browser as normal.
+        if getattr(sys, 'frozen', False):
+            threading.Timer(1.5, open_browser).start()
+        
+        app.run(host='127.0.0.1', port=5001, debug=False)

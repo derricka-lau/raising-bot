@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { Container, Paper, Tabs, Tab, Snackbar, Alert } from "@mui/material";
+import { Container, Paper, Tabs, Tab, Snackbar, Alert, IconButton } from "@mui/material";
+import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import ConfigForm from "./components/ConfigForm";
 import BotConsole from "./components/BotConsole";
 import ConsoleHistory from "./components/ConsoleHistory";
@@ -15,6 +16,7 @@ function App() {
   const [saving, setSaving] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({ open: false, message: "", severity: "success" });
   const [inputValue, setInputValue] = useState("");
+  const [isShuttingDown, setIsShuttingDown] = useState(false);
 
   // Helpers
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -109,12 +111,12 @@ function App() {
 
             // 3. For any other new lines, just take the full server output.
             if (serverOutput.length > prev.length) {
-                return serverOutput;
+              return serverOutput;
             }
 
             // 4. If nothing changed, return the old state to prevent re-renders.
             return prev;
-            
+
             // --- FIX ENDS HERE ---
           });
         }
@@ -139,6 +141,19 @@ function App() {
       if (timeoutId) clearTimeout(timeoutId);
     };
   }, []);
+
+  const handleShutdown = async () => {
+    if (window.confirm("Are you sure you want to shut down the application?")) {
+      setIsShuttingDown(true);
+      try {
+        // A network error here is expected and normal.
+        await fetch("/api/shutdown", { method: "POST" });
+      } catch {
+        // This error is expected because the server connection is severed.
+        console.log("Server shutdown initiated.");
+      }
+    }
+  };
 
   // ConfigForm handlers
   const saveConfig = async () => {
@@ -234,8 +249,24 @@ function App() {
         background: "#fafafa",
       }}
     >
-      <Paper elevation={4} sx={{ p: 4, mx: "auto", width: "100%", maxWidth: 900 }}>
+      <Paper elevation={4} sx={{ p: 4, mx: "auto", width: "100%", maxWidth: 900, position: 'relative' }}>
+        <IconButton
+          onClick={handleShutdown}
+          disabled={isShuttingDown}
+          sx={{ position: 'absolute', top: 8, right: 8 }}
+          title="Shutdown Application"
+        >
+          <PowerSettingsNewIcon color={isShuttingDown ? "disabled" : "error"} />
+        </IconButton>
+
         <h2 style={{ textAlign: "center", marginBottom: 24, fontFamily: `"monospace"` }}>Raising Bot</h2>
+
+        {isShuttingDown && (
+          <Alert severity="warning" sx={{ mb: 2 }}>
+            Application has been shut down. You can now safely close this browser window.
+          </Alert>
+        )}
+
         <Tabs value={tab} onChange={(_, v) => setTab(v)} centered sx={{ mb: 3 }}>
           <Tab label="Config" />
           <Tab label="Bot Console" />
