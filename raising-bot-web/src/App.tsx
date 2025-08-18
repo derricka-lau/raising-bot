@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
-import { Container, Tabs, Tab, Snackbar, Alert, IconButton } from "@mui/material";
+import { Tabs, Tab, Snackbar, Alert, IconButton } from "@mui/material";
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import ConfigForm from "./components/ConfigForm";
 import BotConsole from "./components/BotConsole";
@@ -206,16 +206,15 @@ function App() {
   }, []);
 
   return (
-    <Container
-      maxWidth="md"
-      sx={{
-        py: 6,
+    <div
+      style={{
         display: "flex",
-        flexDirection: "column",
         justifyContent: "center",
+        alignItems: "center",
+        position: "relative",
+        padding: "48px 0",
         fontFamily: `"monospace"`,
         fontSize: 15,
-        background: "#fafafa",
       }}
     >
       <div className="app-card">
@@ -277,7 +276,7 @@ function App() {
           {snackbar.message}
         </Alert>
       </Snackbar>
-    </Container>
+    </div>
   );
 }
 

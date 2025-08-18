@@ -20,7 +20,6 @@ const ConsoleHistory: React.FC<ConsoleHistoryProps> = ({ output }) => {
       <Box
         sx={{
           background: "#fafafa",
-          width: "800px",
           overflowY: "auto",
           p: 2,
           borderRadius: 2,
