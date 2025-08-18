@@ -13,3 +13,4 @@ dist/
 bot_console.log
 config.json
 config.secret.json
+.DS_Store
