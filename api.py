@@ -16,7 +16,7 @@ import re
 # --- INITIALIZE GLOBAL VARIABLES HERE ---
 _lock = threading.Lock()
 bot_process = None
-bot_output = deque(maxlen=1000)
+bot_output = deque(maxlen=5000)
 # --- END INITIALIZATION ---
 
 # --- HELPER FUNCTIONS (resource_path is unchanged) ---
@@ -154,13 +154,23 @@ def read_bot_output():
         assert bot_process and bot_process.stdout
         for line in iter(bot_process.stdout.readline, ""):
             raw = line.rstrip()
+            stripped = re.sub(r'^\[TS:[^\]]+\]\s*', '', raw)
+            is_countdown = stripped.startswith("Waiting for market open:")
+
             # Keep the raw line in the in-memory output (for UI)
             with _lock:
-                bot_output.append(raw)
+                if is_countdown:
+                    # If the last message was also a countdown, replace it.
+                    # Otherwise, append the new one.
+                    if bot_output and bot_output[-1].lstrip().startswith("[TS:") and "Waiting for market open:" in bot_output[-1]:
+                         bot_output[-1] = raw
+                    else:
+                        bot_output.append(raw)
+                else:
+                    bot_output.append(raw)
 
-            # Write to log file except for countdown lines (after stripping optional timestamp)
-            stripped = re.sub(r'^\[TS:[^\]]+\]\s*', '', raw)
-            if not stripped.startswith("Waiting for market open:"):
+            # Write to log file (no change to logging logic)
+            if not is_countdown:
                 try:
                     with open(LOG_FILE, "a") as f:
                         f.write(raw + "\n")
