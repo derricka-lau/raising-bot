@@ -148,21 +148,15 @@ def to_signal(d: dict) -> Signal:
     )
 
 def fetch_existing_orders(app: IBKRApp) -> List[dict]:
+    """Fetches only the currently open orders."""
     print("Requesting open orders...", flush=True)
-    # Use reqAllOpenOrders to get orders from all clients, not just this one.
     ok = request_with_retry(lambda: app.reqAllOpenOrders(), app.open_orders_event, attempts=3, wait_secs=8, desc="Open orders")
     if not ok:
         print("Failed to fetch open orders after retries. Continuing with empty set.", flush=True)
-    open_orders = app.open_orders
 
-    print("Requesting filled orders...", flush=True)
-    ok = request_with_retry(lambda: app.reqExecutions(app.get_new_reqid(), ExecutionFilter()),
-                            app.executions_event, attempts=3, wait_secs=8, desc="Filled orders")
-    if not ok:
-        print("Failed to fetch filled orders after retries. Continuing with open orders only.", flush=True)
-    all_orders = open_orders + app.filled_orders
-    print(f"Found {len(all_orders)} open or filled SPX order(s).", flush=True)
-    return all_orders
+    open_orders = app.open_orders
+    print(f"Found {len(open_orders)} open SPX order(s).", flush=True)
+    return open_orders
 
 def get_trigger_conid_with_retry(app: IBKRApp, attempts: int = 3) -> Optional[int]:
     trigger_conid = None
