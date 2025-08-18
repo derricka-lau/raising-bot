@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState, useMemo } from "react";
-import { Box, Button, Typography, TextField } from "@mui/material";
+import { Box, Button, Typography, TextField, IconButton } from "@mui/material";
 import { stripTimestamp, dedupeCountdowns } from "../utils/consoleUtils";
+import ArrowDownwardIcon from "@mui/icons-material/ArrowDownward";
 
 interface BotConsoleProps {
   output: string[];
@@ -27,6 +28,8 @@ const BotConsole: React.FC<BotConsoleProps> = ({
   const [sessionExists, setSessionExists] = useState<boolean | null>(null);
   const [clearing, setClearing] = useState(false);
   const [hasTelegramConfig, setHasTelegramConfig] = useState(false); // NEW
+  const [showScrollButton, setShowScrollButton] = useState(false);
+  const consoleRef = useRef<HTMLDivElement>(null);
 
   const clearTelegramSession = async () => {
     if (!hasTelegramConfig) return;
@@ -82,16 +85,23 @@ const BotConsole: React.FC<BotConsoleProps> = ({
 
   // Load config to see if Telegram is configured
   useEffect(() => {
+    let isMounted = true; // Flag to track if component is mounted
     const load = async () => {
       try {
         const r = await fetch("/api/config");
         if (!r.ok) return;
         const d = await r.json();
-        const id = (d?.TELEGRAM_API_ID ?? "").toString().trim();
-        setHasTelegramConfig(!!id);
+        if (isMounted) { // Only set state if the component is still mounted
+          const id = (d?.TELEGRAM_API_ID ?? "").toString().trim();
+          setHasTelegramConfig(!!id);
+        }
       } catch { /* ignore */ }
     };
     load();
+
+    return () => {
+      isMounted = false; // Set flag to false on cleanup
+    };
   }, []);
 
   // Check current telegram session presence only if Telegram is configured
@@ -112,8 +122,22 @@ const BotConsole: React.FC<BotConsoleProps> = ({
     check();
   }, [hasTelegramConfig]);
 
+  // Listen for scroll events
+  useEffect(() => {
+    const el = consoleRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 5;
+      setShowScrollButton(!atBottom);
+    };
+    el.addEventListener("scroll", handleScroll);
+    // Check on mount
+    handleScroll();
+    return () => el.removeEventListener("scroll", handleScroll);
+  }, [dedupedOutput]);
+
   return (
-    <Box>
+    <Box sx={{ position: "relative" }}>
       <Typography variant="h6" gutterBottom>
         Bot Console
       </Typography>
@@ -146,6 +170,7 @@ const BotConsole: React.FC<BotConsoleProps> = ({
       </Box>
 
       <Box
+        ref={consoleRef}
         sx={{
           background: "#f5f5f5",
           maxHeight: '400px',
@@ -157,6 +182,7 @@ const BotConsole: React.FC<BotConsoleProps> = ({
           gap: 1,
           mb: 2,
           border: "1px solid #e0e0e0",
+          position: "relative",
         }}
       >
         {dedupedOutput.length === 0 ? (
@@ -189,9 +215,41 @@ const BotConsole: React.FC<BotConsoleProps> = ({
               return <Box key={i} sx={bubbleStyle}>{cleanLine}</Box>;
             })}
             <div ref={endRef} />
+            {showScrollButton && (
+              <IconButton
+                size="small"
+                sx={{
+                  position: "sticky",
+                  bottom: 16,
+                  // This aligns the button to the right edge of the container
+                  alignSelf: "flex-end",
+                  // Adjust for better visual placement
+                  marginRight: 1,
+                  marginTop: -5, // Pulls it up slightly over the last item
+                  
+                  // iOS-style floating button
+                  zIndex: 2,
+                  background: "rgba(255, 255, 255, 0.7)",
+                  backdropFilter: "blur(5px)",
+                  border: "1px solid rgba(0, 0, 0, 0.05)",
+                  color: "#222",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                  "&:hover": {
+                    background: "rgba(255, 255, 255, 0.9)",
+                  },
+                }}
+                onClick={() => {
+                  endRef.current?.scrollIntoView({ behavior: "smooth" });
+                }}
+                aria-label="Scroll to bottom"
+              >
+                <ArrowDownwardIcon />
+              </IconButton>
+            )}
           </>
         )}
       </Box>
+
       <Box sx={{ display: "flex", gap: 1 }}>
         <TextField
           placeholder="Type your command..."

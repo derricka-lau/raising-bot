@@ -8,6 +8,12 @@ from ibapi.contract import Contract
 from ibapi.order_condition import PriceCondition
 
 class IBKRApp(EWrapper, EClient):
+    # Define constants for request IDs
+    REQID_HISTORICAL_OPEN = 99
+    REQID_SPX_STREAM = 100
+    REQID_CONTRACT_DETAILS_IND = 10
+    REQID_CONTRACT_DETAILS_OPT = 11
+
     def __init__(self):
         EClient.__init__(self, self)
         self.nextOrderId = None
@@ -49,7 +55,7 @@ class IBKRApp(EWrapper, EClient):
             print(f"\rLive SPX Price: {self.current_spx_price}", end="", flush=True)
 
     def historicalData(self, reqId, bar):
-        if reqId == 99:
+        if reqId == self.REQID_HISTORICAL_OPEN:
             self.underlying_open_price = bar.open
             print(f"Received historical data: Open={bar.open}", flush=True)
             self.historical_data_event.set() # Signal that data has arrived
