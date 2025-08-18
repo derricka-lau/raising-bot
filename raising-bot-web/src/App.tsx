@@ -23,7 +23,7 @@ function App() {
       ? e.name === "AbortError"
       : typeof e === "object" && e !== null && "name" in e && (e as { name?: string }).name === "AbortError";
 
-  const fetchWithRetry = async (input: RequestInfo, init?: RequestInit, attempts = 3, baseDelay = 400): Promise<Response> => {
+  const fetchWithRetry = useCallback(async (input: RequestInfo, init?: RequestInit, attempts = 3, baseDelay = 400): Promise<Response> => {
     let err: unknown;
     for (let i = 0; i < attempts; i++) {
       try {
@@ -36,7 +36,7 @@ function App() {
       }
     }
     throw err;
-  };
+  }, []);
 
   const confirmRunning = async (expect: boolean, timeoutMs = 5000): Promise<boolean> => {
     const start = Date.now();
@@ -58,38 +58,48 @@ function App() {
     let mounted = true;
     const controller = new AbortController();
 
-    const init = async () => {
-      // config with retry
-      try {
-        const r = await fetchWithRetry("/api/config", { signal: controller.signal });
-        const data = await r.json();
-        if (mounted) setConfig(data);
-      } catch (e) {
-        if (!isAbortError(e)) setSnackbar({ open: true, message: "Failed to load config.", severity: "error" });
+    // --- WebSocket Connection ---
+    const socket: Socket = io(`http://${window.location.hostname}:9527`);
+    socket.on("output", (data: { line: string }) => {
+      if (mounted) {
+        setOutput(prev => [...prev, data.line]);
       }
-      // status with retry
+    });
+    // --- End WebSocket ---
+
+    const init = async () => {
+      // Fetch all initial state concurrently for speed
       try {
-        const r = await fetchWithRetry("/api/status", { signal: controller.signal });
-        const data: { running?: boolean } = await r.json();
-        if (mounted && typeof data.running === "boolean") setBotRunning(data.running);
+        const [configRes, statusRes, outputRes] = await Promise.all([
+          fetchWithRetry("/api/config", { signal: controller.signal }),
+          fetchWithRetry("/api/status", { signal: controller.signal }),
+          fetchWithRetry("/api/output", { signal: controller.signal }), // <-- Fetch output history
+        ]);
+        
+        const configData = await configRes.json();
+        const statusData: { running?: boolean } = await statusRes.json();
+        const outputData: { output?: string[] } = await outputRes.json(); // <-- Get output history
+
+        if (mounted) {
+          setConfig(configData);
+          if (typeof statusData.running === "boolean") setBotRunning(statusData.running);
+          setOutput(outputData.output ?? []); // <-- Set initial output state
+        }
       } catch (e) {
-        if (!isAbortError(e)) setSnackbar({ open: true, message: "Failed to load status.", severity: "error" });
+        if (!isAbortError(e)) {
+          setSnackbar({ open: true, message: "Failed to load initial state.", severity: "error" });
+        }
       }
     };
 
-    // Replace polling with socket.io
-    const socket: Socket = io("http://127.0.0.1:9527");
-    socket.on("output", (data: { line: string }) => {
-      setOutput(prev => [...prev, data.line]);
-    });
-
     init();
+
     return () => {
       mounted = false;
       controller.abort();
       socket.disconnect();
     };
-  }, []);
+  }, [fetchWithRetry]);
 
   const handleShutdown = async () => {
     if (window.confirm("Are you sure you want to shut down the application?")) {
