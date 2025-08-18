@@ -310,6 +310,17 @@ def telegram_session():
                 errors.append(f"{p}: {e}")
         return jsonify({"status": "ok", "removed": removed, "errors": errors})
 
+@app.route('/api/shutdown', methods=['POST'])
+def shutdown():
+    """Shuts down the Flask server."""
+    shutdown_func = request.environ.get('werkzeug.server.shutdown')
+    if shutdown_func is None:
+        # This is a fallback for non-development servers, though it's an abrupt exit.
+        # For the default Flask server, the above line is the clean way.
+        os._exit(0)
+    shutdown_func()
+    return jsonify({"status": "shutting down"})
+
 # Serve React static files
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
@@ -322,7 +333,7 @@ def serve(path):
 # --- ADD THIS BROWSER-OPENING LOGIC AT THE VERY END ---
 def open_browser():
     # Opens the browser to your app after a short delay
-    webbrowser.open_new_tab("http://127.0.0.1:5001")
+    webbrowser.open_new_tab("http://127.0.0.1:9527")
 
 if __name__ == "__main__":
     # --- THIS IS THE CRITICAL CHANGE ---
@@ -346,4 +357,4 @@ if __name__ == "__main__":
         if getattr(sys, 'frozen', False):
             threading.Timer(1.5, open_browser).start()
         
-        app.run(host='127.0.0.1', port=5001, debug=False)
+        app.run(host='127.0.0.1', port=9527, debug=False)
