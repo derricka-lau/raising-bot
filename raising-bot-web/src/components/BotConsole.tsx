@@ -1,5 +1,6 @@
-import React, { useRef, useEffect, useState } from "react";
+import React, { useRef, useEffect, useState, useMemo } from "react";
 import { Box, Button, Typography, TextField } from "@mui/material";
+import { stripTimestamp, dedupeCountdowns } from "../utils/consoleUtils";
 
 interface BotConsoleProps {
   output: string[];
@@ -23,49 +24,9 @@ const BotConsole: React.FC<BotConsoleProps> = ({
   sendInput,
 }) => {
   const endRef = useRef<HTMLDivElement>(null);
-  const prevLengthRef = useRef<number>(output.length);
   const [sessionExists, setSessionExists] = useState<boolean | null>(null);
   const [clearing, setClearing] = useState(false);
   const [hasTelegramConfig, setHasTelegramConfig] = useState(false); // NEW
-
-  useEffect(() => {
-    if (output.length > prevLengthRef.current && endRef.current) {
-      endRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-    prevLengthRef.current = output.length;
-  }, [output]);
-
-  // Load config to see if Telegram is configured
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const r = await fetch("/api/config");
-        if (!r.ok) return;
-        const d = await r.json();
-        const id = (d?.TELEGRAM_API_ID ?? "").toString().trim();
-        setHasTelegramConfig(!!id);
-      } catch { /* ignore */ }
-    };
-    load();
-  }, []);
-
-  // Check current telegram session presence only if Telegram is configured
-  useEffect(() => {
-    if (!hasTelegramConfig) {
-      setSessionExists(null);
-      return;
-    }
-    const check = async () => {
-      try {
-        const r = await fetch("/api/telegram/session");
-        if (r.ok) {
-          const d = await r.json();
-          setSessionExists(!!d.exists);
-        }
-      } catch { /* ignore */ }
-    };
-    check();
-  }, [hasTelegramConfig]);
 
   const clearTelegramSession = async () => {
     if (!hasTelegramConfig) return;
@@ -100,6 +61,56 @@ const BotConsole: React.FC<BotConsoleProps> = ({
     fontFamily: "monospace",
     fontSize: 15,
   };
+
+  // compute deduped output locally (App does not provide it)
+  const dedupedOutput = useMemo(() => dedupeCountdowns(output), [output]);
+
+  const lastLineRef = useRef<string | undefined>(dedupedOutput[dedupedOutput.length - 1]);
+
+  useEffect(() => {
+    const lastLine = dedupedOutput[dedupedOutput.length - 1];
+    const cleanLast = stripTimestamp(lastLine || "");
+    if (
+      lastLine !== lastLineRef.current &&
+      endRef.current &&
+      !cleanLast.startsWith("Waiting for market open:")
+    ) {
+      endRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+    lastLineRef.current = lastLine;
+  }, [dedupedOutput]);
+
+  // Load config to see if Telegram is configured
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const r = await fetch("/api/config");
+        if (!r.ok) return;
+        const d = await r.json();
+        const id = (d?.TELEGRAM_API_ID ?? "").toString().trim();
+        setHasTelegramConfig(!!id);
+      } catch { /* ignore */ }
+    };
+    load();
+  }, []);
+
+  // Check current telegram session presence only if Telegram is configured
+  useEffect(() => {
+    if (!hasTelegramConfig) {
+      setSessionExists(null);
+      return;
+    }
+    const check = async () => {
+      try {
+        const r = await fetch("/api/telegram/session");
+        if (r.ok) {
+          const d = await r.json();
+          setSessionExists(!!d.exists);
+        }
+      } catch { /* ignore */ }
+    };
+    check();
+  }, [hasTelegramConfig]);
 
   return (
     <Box>
@@ -148,15 +159,16 @@ const BotConsole: React.FC<BotConsoleProps> = ({
           border: "1px solid #e0e0e0",
         }}
       >
-        {output.length === 0 ? (
+        {dedupedOutput.length === 0 ? (
           <Typography color="grey.600">No output yet.</Typography>
         ) : (
           <>
-            {output.map((line, i) => {
+            {dedupedOutput.map((line, i) => {
+              const cleanLine = stripTimestamp(line);
               // Detect and format signal lines
-              if (line.startsWith("Processing signal: ")) {
+              if (cleanLine.startsWith("Processing signal: ")) {
                 try {
-                  const jsonStr = line.replace("Processing signal: ", "");
+                  const jsonStr = cleanLine.replace("Processing signal: ", "");
                   const signal = JSON.parse(jsonStr);
                   return (
                     <Box key={i} sx={bubbleStyle}>
@@ -170,11 +182,11 @@ const BotConsole: React.FC<BotConsoleProps> = ({
                   );
                 } catch {
                   // fallback to raw line
-                  return <Box key={i} sx={bubbleStyle}>{line}</Box>;
+                  return <Box key={i} sx={bubbleStyle}>{cleanLine}</Box>;
                 }
               }
               // Default: regular line
-              return <Box key={i} sx={bubbleStyle}>{line}</Box>;
+              return <Box key={i} sx={bubbleStyle}>{cleanLine}</Box>;
             })}
             <div ref={endRef} />
           </>

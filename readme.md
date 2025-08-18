@@ -1,6 +1,6 @@
-# Raising Bot
+# Raising Order Management
 
-Raising Bot is a simple desktop application that helps automate trading strategies on Interactive Brokers (IBKR). It listens for trading signals from a Telegram channel (or manual input) and automatically places orders based on pre-set conditions.
+Raising Order Management is a simple desktop application that helps automate trading strategies on Interactive Brokers (IBKR). It listens for trading signals from a Telegram channel (or manual input) and automatically places orders based on pre-set conditions.
 
 ## Features
 

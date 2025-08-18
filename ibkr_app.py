@@ -32,14 +32,13 @@ class IBKRApp(EWrapper, EClient):
 
     def error(self, reqId, errorCode, errorString):
         # Informational codes
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         info_codes = [2104, 2106, 2158, 162, 2107, 2108, 2110, 2111, 2112, 2113, 2114]
         if errorCode in info_codes:
-            print(f"{timestamp}:  IBKR INFO: reqId {reqId}, Code {errorCode} - {errorString}", flush=True)
+            print(f"IBKR INFO: reqId {reqId}, Code {errorCode} - {errorString}", flush=True)
             return
         if errorCode == 202:
-            print(f"{timestamp}:  Order cancellation confirmed for reqId {reqId}.", flush=True)
-        print(f"{timestamp}:  IBKR Log: reqId {reqId}, Code {errorCode} - {errorString}", flush=True)
+            print(f"Order cancellation confirmed for reqId {reqId}.", flush=True)
+        print(f"IBKR Log: reqId {reqId}, Code {errorCode} - {errorString}", flush=True)
 
     def tickPrice(self, reqId, tickType, price, attrib):
         """Callback for streaming market data."""

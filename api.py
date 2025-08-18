@@ -2,6 +2,7 @@ import os
 import sys
 import webbrowser
 import threading
+import print_utils
 from collections import deque
 from flask import Flask, request, jsonify, send_from_directory # <-- Make sure send_from_directory is imported
 import json
@@ -10,6 +11,7 @@ import random
 import time
 from pathlib import Path # <-- Add this import
 import argparse # <-- Add this import
+import re
 
 # --- INITIALIZE GLOBAL VARIABLES HERE ---
 _lock = threading.Lock()
@@ -151,11 +153,20 @@ def read_bot_output():
     try:
         assert bot_process and bot_process.stdout
         for line in iter(bot_process.stdout.readline, ""):
+            raw = line.rstrip()
+            # Keep the raw line in the in-memory output (for UI)
             with _lock:
-                bot_output.append(line.rstrip())
-            # Log to the correct writable file
-            with open(LOG_FILE, "a") as f:
-                f.write(line.rstrip() + "\n")
+                bot_output.append(raw)
+
+            # Write to log file except for countdown lines (after stripping optional timestamp)
+            stripped = re.sub(r'^\[TS:[^\]]+\]\s*', '', raw)
+            if not stripped.startswith("Waiting for market open:"):
+                try:
+                    with open(LOG_FILE, "a") as f:
+                        f.write(raw + "\n")
+                except Exception:
+                    # If logging fails, don't crash the reader thread
+                    pass
     except Exception:
         pass
     finally:

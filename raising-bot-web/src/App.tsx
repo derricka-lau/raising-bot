@@ -1,11 +1,9 @@
 import { useEffect, useState, useCallback } from "react";
-import { Container, Paper, Tabs, Tab, Snackbar, Alert, IconButton } from "@mui/material";
+import { Container, Tabs, Tab, Snackbar, Alert, IconButton } from "@mui/material";
 import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import ConfigForm from "./components/ConfigForm";
 import BotConsole from "./components/BotConsole";
 import ConsoleHistory from "./components/ConsoleHistory";
-
-
 
 function App() {
   const [tab, setTab] = useState(0);
@@ -90,37 +88,9 @@ function App() {
         if (!r.ok) throw new Error("Output HTTP error");
         const data: { output?: string[] } = await r.json();
         if (!cancelled) {
-          setOutput((prev) => {
-            const serverOutput: string[] = data.output || [];
-            const lastServerLine = serverOutput[serverOutput.length - 1] || "";
-
-            // --- FIX STARTS HERE ---
-
-            // 1. On first load after refresh, `prev` is empty. Always take the full server output.
-            if (prev.length === 0) {
-              return serverOutput;
-            }
-
-            // 2. If the last line is a countdown, update it in-place to prevent flooding.
-            if (lastServerLine.startsWith("Waiting for market open:")) {
-              // Filter the *previous* state to remove any old countdowns...
-              const prevWithoutCountdown = prev.filter((l) => !l.startsWith("Waiting for market open:"));
-              // ...and add the new one.
-              return [...prevWithoutCountdown, lastServerLine];
-            }
-
-            // 3. For any other new lines, just take the full server output.
-            if (serverOutput.length > prev.length) {
-              return serverOutput;
-            }
-
-            // 4. If nothing changed, return the old state to prevent re-renders.
-            return prev;
-
-            // --- FIX ENDS HERE ---
-          });
+          setOutput(data.output ?? []);
         }
-        delay = 1000; // reset on success
+        delay = 1000;
       } catch (e) {
         if (!isAbortError(e)) {
           // exponential backoff up to 15s
@@ -249,7 +219,7 @@ function App() {
         background: "#fafafa",
       }}
     >
-      <Paper elevation={4} sx={{ p: 4, mx: "auto", width: "100%", maxWidth: 900, position: 'relative' }}>
+      <div className="app-card">
         <IconButton
           onClick={handleShutdown}
           disabled={isShuttingDown}
@@ -259,8 +229,7 @@ function App() {
           <PowerSettingsNewIcon color={isShuttingDown ? "disabled" : "error"} />
         </IconButton>
 
-        <h2 style={{ textAlign: "center", marginBottom: 24, fontFamily: `"monospace"` }}>Raising Bot</h2>
-
+        <h2 className="app-title">Raising Order Management</h2>
         {isShuttingDown && (
           <Alert severity="warning" sx={{ mb: 2 }}>
             Application has been shut down. You can now safely close this browser window.
@@ -295,7 +264,7 @@ function App() {
         {tab === 2 && (
           <ConsoleHistory output={output} />
         )}
-      </Paper>
+      </div>
       <Snackbar
         open={snackbar.open}
         autoHideDuration={3000}
