@@ -6,7 +6,7 @@ import BotConsole from "./components/BotConsole";
 import ConsoleHistory from "./components/ConsoleHistory";
 
 function App() {
-  const [tab, setTab] = useState(0);
+  const [tab, setTab] = useState(1);
   const [config, setConfig] = useState<Record<string, string>>({});
   const [output, setOutput] = useState<string[]>([]);
   const [botRunning, setBotRunning] = useState(false);
@@ -16,7 +16,6 @@ function App() {
   const [inputValue, setInputValue] = useState("");
   const [isShuttingDown, setIsShuttingDown] = useState(false);
 
-  // Helpers
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
   const isAbortError = (e: unknown) =>
     e instanceof DOMException
