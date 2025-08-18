@@ -157,11 +157,17 @@ def read_bot_output():
         for line in iter(bot_process.stdout.readline, ""):
             raw = line.rstrip()
             stripped = re.sub(r'^\[TS:[^\]]+\]\s*', '', raw)
-            is_streaming = stripped.startswith("Waiting for market open:") or stripped.startswith("Live SPX Price:")
+            UPDATABLE_PREFIXES = ("Waiting for market open:", "Live SPX Price:")
+
+            def is_updatable_line(line):
+                stripped = re.sub(r'^\[TS:[^\]]+\]\s*', '', line)
+                return any(stripped.startswith(prefix) for prefix in UPDATABLE_PREFIXES)
+
+            is_updatable = any(stripped.startswith(prefix) for prefix in UPDATABLE_PREFIXES)
 
             with _lock:
-                if is_streaming:
-                    if bot_output and bot_output[-1].lstrip().startswith("[TS:") and "Waiting for market open:" in bot_output[-1] or "Live SPX Price:" in bot_output[-1]:
+                if is_updatable:
+                    if bot_output and is_updatable_line(bot_output[-1]):
                         bot_output[-1] = raw
                     else:
                         bot_output.append(raw)
@@ -170,7 +176,7 @@ def read_bot_output():
             # Emit the new line to all connected clients
             socketio.emit("output", {"line": raw})
 
-            if not is_streaming:
+            if not is_updatable:
                 try:
                     with open(LOG_FILE, "a") as f:
                         f.write(raw + "\n")
