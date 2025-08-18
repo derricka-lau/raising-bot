@@ -126,14 +126,14 @@ def process_managed_orders(app, managed_orders, underlying_symbol):
     Processes managed orders by comparing open price to trigger and transmitting/cancelling as needed.
     """
     for order_info in managed_orders:
-        if app.underlying_open_price >= order_info["trigger"]:
-            print(f"!! NO-GO for Order {order_info['id']} !! {underlying_symbol} open ({app.underlying_open_price}) >= trigger ({order_info['trigger']}). CANCELLING.", flush=True)
-            app.cancelOrder(order_info["id"])
+        if app.underlying_open_price >= order_info.trigger:
+            print(f"!! NO-GO for Order {order_info.id} !! {underlying_symbol} open ({app.underlying_open_price}) >= trigger ({order_info.trigger}). CANCELLING.", flush=True)
+            app.cancelOrder(order_info.id)
         else:
-            print(f"** GO for Order {order_info['id']}! ** Open price ({app.underlying_open_price}) is favorable. TRANSMITTING.", flush=True)
-            final_order = order_info["order_obj"]
+            print(f"** GO for Order {order_info.id}! ** Open price ({app.underlying_open_price}) is favorable. TRANSMITTING.", flush=True)
+            final_order = order_info.order_obj
             final_order.transmit = True
-            app.placeOrder(order_info["id"], order_info["contract"], final_order)
+            app.placeOrder(order_info.id, order_info.contract, final_order)
 
 def to_signal(d: dict) -> Signal:
     return Signal(
@@ -149,7 +149,8 @@ def to_signal(d: dict) -> Signal:
 
 def fetch_existing_orders(app: IBKRApp) -> List[dict]:
     print("Requesting open orders...", flush=True)
-    ok = request_with_retry(lambda: app.reqOpenOrders(), app.open_orders_event, attempts=3, wait_secs=8, desc="Open orders")
+    # Use reqAllOpenOrders to get orders from all clients, not just this one.
+    ok = request_with_retry(lambda: app.reqAllOpenOrders(), app.open_orders_event, attempts=3, wait_secs=8, desc="Open orders")
     if not ok:
         print("Failed to fetch open orders after retries. Continuing with empty set.", flush=True)
     open_orders = app.open_orders
@@ -356,6 +357,18 @@ def main_loop():
 
         try:
             existing_orders = fetch_existing_orders(app)
+
+            # --- FIX: Adjust nextOrderId based on existing orders ---
+            if existing_orders:
+                # Find the highest ID among all open/filled orders fetched
+                max_existing_id = max(order.get("orderId", 0) for order in existing_orders)
+                
+                # If the highest existing ID is greater than what the API suggested, update it.
+                if max_existing_id >= app.nextOrderId:
+                    new_next_id = max_existing_id + 1
+                    print(f"Adjusting nextOrderId. API gave {app.nextOrderId}, but max existing is {max_existing_id}. Setting next ID to {new_next_id}.", flush=True)
+                    app.nextOrderId = new_next_id
+            # --- END FIX ---
 
             trigger_conid = get_trigger_conid_with_retry(app, attempts=3)
             if trigger_conid is None:

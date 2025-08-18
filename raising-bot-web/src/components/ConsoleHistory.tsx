@@ -9,7 +9,7 @@ interface ConsoleHistoryProps {
 const ConsoleHistory: React.FC<ConsoleHistoryProps> = ({ output }) => {
   // Remove countdown lines from history (keep only non-countdown lines)
   const filteredOutput = output.filter(
-    (line) => !stripTimestamp(line).startsWith("Waiting for market open:")
+    (line) => !stripTimestamp(line).startsWith("Waiting for market open:") && !stripTimestamp(line).startsWith("Live SPX Price:")
   );
 
   return (

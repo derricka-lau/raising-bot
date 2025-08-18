@@ -52,7 +52,7 @@ class IBKRApp(EWrapper, EClient):
         # tickType 4 is 'LAST_PRICE'
         if reqId == 100 and tickType == 4: # Use a dedicated reqId for the SPX stream
             self.current_spx_price = price
-            print(f"\rLive SPX Price: {self.current_spx_price}", end="", flush=True)
+            print(f"Live SPX Price: {self.current_spx_price}", flush=True)
 
     def historicalData(self, reqId, bar):
         if reqId == self.REQID_HISTORICAL_OPEN:

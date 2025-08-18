@@ -157,11 +157,11 @@ def read_bot_output():
         for line in iter(bot_process.stdout.readline, ""):
             raw = line.rstrip()
             stripped = re.sub(r'^\[TS:[^\]]+\]\s*', '', raw)
-            is_countdown = stripped.startswith("Waiting for market open:")
+            is_streaming = stripped.startswith("Waiting for market open:") or stripped.startswith("Live SPX Price:")
 
             with _lock:
-                if is_countdown:
-                    if bot_output and bot_output[-1].lstrip().startswith("[TS:") and "Waiting for market open:" in bot_output[-1]:
+                if is_streaming:
+                    if bot_output and bot_output[-1].lstrip().startswith("[TS:") and "Waiting for market open:" in bot_output[-1] or "Live SPX Price:" in bot_output[-1]:
                         bot_output[-1] = raw
                     else:
                         bot_output.append(raw)
@@ -170,7 +170,7 @@ def read_bot_output():
             # Emit the new line to all connected clients
             socketio.emit("output", {"line": raw})
 
-            if not is_countdown:
+            if not is_streaming:
                 try:
                     with open(LOG_FILE, "a") as f:
                         f.write(raw + "\n")
