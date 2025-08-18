@@ -117,9 +117,14 @@ def _start_subprocess_with_retry():
     env["PYTHONUNBUFFERED"] = "1"
     last_err = None
 
-    # This command will now correctly run ONLY the main_loop in a subprocess.
-    # It calls the main executable but tells it to run in a different mode.
-    command = [sys.executable, "--run-main", "--client-id", str(random.randint(100, 999))]
+    # Create the correct command based on whether the app is packaged or not.
+    if getattr(sys, 'frozen', False):
+        # In a packaged app, sys.executable is the app itself.
+        command = [sys.executable, "--run-main", "--client-id", str(random.randint(100, 999))]
+    else:
+        # In development, we must explicitly call the script (api.py).
+        # sys.argv[0] is the path to the current script (api.py).
+        command = [sys.executable, sys.argv[0], "--run-main", "--client-id", str(random.randint(100, 999))]
 
     for i in range(3):
         try:
