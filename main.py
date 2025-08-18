@@ -160,7 +160,7 @@ def fetch_existing_orders(app: IBKRApp) -> List[dict]:
     if not ok:
         print("Failed to fetch filled orders after retries. Continuing with open orders only.", flush=True)
     all_orders = open_orders + app.filled_orders
-    print(f"Found {len(all_orders)} open or filled order(s).", flush=True)
+    print(f"Found {len(all_orders)} open or filled SPX order(s).", flush=True)
     return all_orders
 
 def get_trigger_conid_with_retry(app: IBKRApp, attempts: int = 3) -> Optional[int]:
