@@ -7,3 +7,4 @@ telethon
 pyaes
 rsa
 pyasn1
+flask-socketio

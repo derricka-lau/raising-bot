@@ -18,10 +18,9 @@ class IBKRApp(EWrapper, EClient):
         EClient.__init__(self, self)
         self.nextOrderId = None
         self.underlying_open_price = None
-        self.current_spx_price = None # <-- ADD THIS: For the live price
+        self.current_spx_price = None
         self.lastConId = None
         self.open_orders = []
-        self.filled_orders = []  # <-- add this
         self.nextReqId = 1  # Start from 1 or any number
         # --- Add threading events for synchronization ---
         self.connected_event = threading.Event()
@@ -52,7 +51,7 @@ class IBKRApp(EWrapper, EClient):
         # tickType 4 is 'LAST_PRICE'
         if reqId == 100 and tickType == 4: # Use a dedicated reqId for the SPX stream
             self.current_spx_price = price
-            print(f"\rLive SPX Price: {self.current_spx_price}", end="", flush=True)
+            print(f"Live SPX Price: {self.current_spx_price}", flush=True)
 
     def historicalData(self, reqId, bar):
         if reqId == self.REQID_HISTORICAL_OPEN:
@@ -140,24 +139,6 @@ class IBKRApp(EWrapper, EClient):
         if status == "Inactive":
             if orderId not in self.error_order_ids:
                 self.error_order_ids.append(orderId)
-
-    def execDetails(self, reqId, contract, execution):
-        # This is called for each filled order
-        order_info = {
-            "orderId": execution.orderId,
-            "symbol": contract.symbol,
-            "secType": contract.secType,
-            "conId": contract.conId,
-            "price": execution.price,
-            # Add more fields as needed
-        }
-        self.filled_orders.append(order_info)
-
-    def execDetailsEnd(self, reqId):
-        """Called when all execution details have been received."""
-        super().execDetailsEnd(reqId)
-        print("Finished receiving executions.", flush=True)
-        self.executions_event.set() # <-- ADD THIS
 
     def get_new_reqid(self):
         reqid = self.nextReqId

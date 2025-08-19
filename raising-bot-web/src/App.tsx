@@ -4,6 +4,7 @@ import PowerSettingsNewIcon from '@mui/icons-material/PowerSettingsNew';
 import ConfigForm from "./components/ConfigForm";
 import BotConsole from "./components/BotConsole";
 import ConsoleHistory from "./components/ConsoleHistory";
+import { io, Socket } from "socket.io-client";
 
 function App() {
   const [tab, setTab] = useState(1);
@@ -22,7 +23,7 @@ function App() {
       ? e.name === "AbortError"
       : typeof e === "object" && e !== null && "name" in e && (e as { name?: string }).name === "AbortError";
 
-  const fetchWithRetry = async (input: RequestInfo, init?: RequestInit, attempts = 3, baseDelay = 400): Promise<Response> => {
+  const fetchWithRetry = useCallback(async (input: RequestInfo, init?: RequestInit, attempts = 3, baseDelay = 400): Promise<Response> => {
     let err: unknown;
     for (let i = 0; i < attempts; i++) {
       try {
@@ -35,7 +36,7 @@ function App() {
       }
     }
     throw err;
-  };
+  }, []);
 
   const confirmRunning = async (expect: boolean, timeoutMs = 5000): Promise<boolean> => {
     const start = Date.now();
@@ -57,59 +58,48 @@ function App() {
     let mounted = true;
     const controller = new AbortController();
 
+    // --- WebSocket Connection ---
+    const socket: Socket = io(`http://${window.location.hostname}:9527`);
+    socket.on("output", (data: { line: string }) => {
+      if (mounted) {
+        setOutput(prev => [...prev, data.line]);
+      }
+    });
+    // --- End WebSocket ---
+
     const init = async () => {
-      // config with retry
+      // Fetch all initial state concurrently for speed
       try {
-        const r = await fetchWithRetry("/api/config", { signal: controller.signal });
-        const data = await r.json();
-        if (mounted) setConfig(data);
-      } catch (e) {
-        if (!isAbortError(e)) setSnackbar({ open: true, message: "Failed to load config.", severity: "error" });
-      }
-      // status with retry
-      try {
-        const r = await fetchWithRetry("/api/status", { signal: controller.signal });
-        const data: { running?: boolean } = await r.json();
-        if (mounted && typeof data.running === "boolean") setBotRunning(data.running);
-      } catch (e) {
-        if (!isAbortError(e)) setSnackbar({ open: true, message: "Failed to load status.", severity: "error" });
-      }
-    };
+        const [configRes, statusRes, outputRes] = await Promise.all([
+          fetchWithRetry("/api/config", { signal: controller.signal }),
+          fetchWithRetry("/api/status", { signal: controller.signal }),
+          fetchWithRetry("/api/output", { signal: controller.signal }), // <-- Fetch output history
+        ]);
+        
+        const configData = await configRes.json();
+        const statusData: { running?: boolean } = await statusRes.json();
+        const outputData: { output?: string[] } = await outputRes.json(); // <-- Get output history
 
-    // Output polling with backoff
-    let cancelled = false;
-    let timeoutId: number | undefined;
-    let delay = 1000;
-
-    const poll = async () => {
-      try {
-        const r = await fetch("/api/output");
-        if (!r.ok) throw new Error("Output HTTP error");
-        const data: { output?: string[] } = await r.json();
-        if (!cancelled) {
-          setOutput(data.output ?? []);
+        if (mounted) {
+          setConfig(configData);
+          if (typeof statusData.running === "boolean") setBotRunning(statusData.running);
+          setOutput(outputData.output ?? []); // <-- Set initial output state
         }
-        delay = 1000;
       } catch (e) {
         if (!isAbortError(e)) {
-          // exponential backoff up to 15s
-          delay = Math.min(delay * 2, 15000);
-        }
-      } finally {
-        if (!cancelled) {
-          timeoutId = window.setTimeout(poll, delay);
+          setSnackbar({ open: true, message: "Failed to load initial state.", severity: "error" });
         }
       }
     };
 
-    init().then(() => poll());
+    init();
+
     return () => {
       mounted = false;
-      cancelled = true;
       controller.abort();
-      if (timeoutId) clearTimeout(timeoutId);
+      socket.disconnect();
     };
-  }, []);
+  }, [fetchWithRetry]);
 
   const handleShutdown = async () => {
     if (window.confirm("Are you sure you want to shut down the application?")) {

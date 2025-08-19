@@ -77,6 +77,7 @@ const BotConsole: React.FC<BotConsoleProps> = ({
       lastLine !== lastLineRef.current &&
       endRef.current &&
       !cleanLast.startsWith("Waiting for market open:")
+      && !cleanLast.startsWith("Live SPX Price:")
     ) {
       endRef.current.scrollIntoView({ behavior: "smooth" });
     }
