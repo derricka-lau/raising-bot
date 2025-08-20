@@ -352,7 +352,6 @@ def main_loop():
         try:
             existing_orders = fetch_existing_orders(app)
 
-            # --- FIX: Adjust nextOrderId based on existing orders ---
             if existing_orders:
                 # Find the highest ID among all open/filled orders fetched
                 max_existing_id = max(order.get("orderId", 0) for order in existing_orders)
@@ -362,13 +361,13 @@ def main_loop():
                     new_next_id = max_existing_id + 1
                     print(f"Adjusting nextOrderId. API gave {app.nextOrderId}, but max existing is {max_existing_id}. Setting next ID to {new_next_id}.", flush=True)
                     app.nextOrderId = new_next_id
-            # --- END FIX ---
 
             trigger_conid = get_trigger_conid_with_retry(app, attempts=3)
             if trigger_conid is None:
                 print("Fatal Error: could not fetch SPX conId. Exiting.")
                 app.disconnect(); return
 
+            time.sleep(5)
             print("--------------------------", flush=True)
             print("Looking for new signals...", flush=True)
             signals = gather_signals()
