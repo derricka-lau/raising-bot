@@ -2,8 +2,24 @@
 
 import json
 import os
+from pathlib import Path
+import sys
 
-CONFIG_FILE = 'config.json'
+# --- START: New code to find the correct config path ---
+def get_user_data_dir():
+    """Get a writable directory for user data (config, logs, session)."""
+    if sys.platform == "win32":
+        path = Path(os.getenv("APPDATA")) / "RaisingBot"
+    else: # macOS and other Unix-like
+        path = Path.home() / "Library" / "Application Support" / "RaisingBot"
+    # The subprocess doesn't create the dir, it assumes the API server did.
+    return str(path)
+
+# Use the same logic as api.py to locate the config file
+USER_DATA_DIR = get_user_data_dir()
+CONFIG_FILE = os.path.join(USER_DATA_DIR, 'config.json')
+# --- END: New code ---
+
 CONFIG_DEFAULTS = {
     "IBKR_ACCOUNT": "",
     "IBKR_PORT": 7496,

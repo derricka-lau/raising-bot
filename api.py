@@ -4,7 +4,7 @@ import webbrowser
 import threading
 import print_utils
 from collections import deque
-from flask import Flask, request, jsonify, send_from_directory # <-- Make sure send_from_directory is imported
+from flask import Flask, request, jsonify
 from flask_socketio import SocketIO, emit
 import json
 import subprocess
