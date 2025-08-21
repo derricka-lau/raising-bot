@@ -2,21 +2,25 @@ name: Build RaisingBot
 
 on:
   push:
-    branches: [ main ]
+    # tags:
+    #   - '*'
   workflow_dispatch:
+
 
 jobs:
   build-mac:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
+      - name: List files
+        run: ls -R
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
       - name: Install dependencies
         run: |
-          pip install -r raising-bot/raising-bot/requirements.txt
+          pip install -r raising-bot/requirements.txt
           pip install pyinstaller
       - name: Build with PyInstaller
         run: |
@@ -31,6 +35,15 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Build frontend
+        run: |
+          cd raising-bot/raising-bot-web
+          npm install
+          npm run build
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
@@ -41,6 +54,7 @@ jobs:
           pip install pyinstaller
       - name: Build with PyInstaller
         run: |
+          cd raising-bot
           pyinstaller RaisingBot.spec
       - name: Upload artifact
         uses: actions/upload-artifact@v4
