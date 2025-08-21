@@ -16,7 +16,7 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: |
-          pip install -r raising-bot/requirements.txt
+          pip install -r raising-bot/raising-bot/requirements.txt
           pip install pyinstaller
       - name: Build with PyInstaller
         run: |
@@ -38,7 +38,7 @@ jobs:
           python-version: '3.11'
       - name: Install dependencies
         run: |
-          pip install -r raising-bot/requirements.txt
+          pip install -r raising-bot/raising-bot/requirements.txt
           pip install pyinstaller
       - name: Build with PyInstaller
         run: |
