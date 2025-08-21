@@ -40,12 +40,15 @@ def get_signal_from_telegram():
                 # Check if actually logged in
                 if await client.is_user_authorized():
                     message = await client.get_messages(TELEGRAM_CHANNEL, limit=1)
+                    await client.disconnect()
                     return message[0].text
                 else:
                     # Session exists but is invalid, go to manual login
                     print("Session invalid, manual login required.", flush=True)
+                    await client.disconnect()
             except Exception as e:
                 print(f"Session failed: {e}", flush=True)
+                if 'client' in locals() and client.is_connected(): await client.disconnect()
         
         # If no session or session failed, do manual login
         client = await run_manual_login()
@@ -53,9 +56,11 @@ def get_signal_from_telegram():
             return None
         try:
             message = await client.get_messages(TELEGRAM_CHANNEL, limit=1)
+            await client.disconnect()
             return message[0].text
         except Exception as e:
             print(f"Failed to fetch messages: {e}", flush=True)
+            if client.is_connected(): await client.disconnect()
             return None
 
     try:

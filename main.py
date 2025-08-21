@@ -250,6 +250,52 @@ def stage_order(app: IBKRApp, signal: Signal, contract: Contract, order: Order, 
         hash=signal_hash,
     )
 
+def process_and_stage_new_signals(app: IBKRApp, signals: List[Signal], managed_orders: List[ManagedOrder], existing_orders: List[dict], trigger_conid: int):
+    """
+    Processes a new batch of signals, checks for duplicates against all known orders (API + current session),
+    and stages valid new orders. Appends new ManagedOrder objects to the managed_orders list.
+    """
+    if not signals:
+        return
+
+    # Create a set of identifiers from all orders we know about for efficient duplicate checking
+    # An identifier is a tuple of (sorted_leg_conids, trigger_price)
+    known_order_identifiers = set()
+    for order in existing_orders:
+        if order.get("secType") == "BAG" and order.get("leg_conIds") and order.get("trigger_price"):
+            known_order_identifiers.add((tuple(order["leg_conIds"]), order["trigger_price"]))
+    for mo in managed_orders:
+        leg_ids = sorted([leg.conId for leg in mo.contract.comboLegs])
+        known_order_identifiers.add((tuple(leg_ids), mo.trigger))
+
+    for s in signals:
+        print(f"Processing signal: {json.dumps(s.__dict__)}", flush=True)
+        try:
+            lc_conid = get_option_conid_with_retry(app, s.expiry, s.lc_strike, "C", attempts=3)
+            sc_conid = get_option_conid_with_retry(app, s.expiry, s.sc_strike, "C", attempts=3)
+            
+            leg_ids = sorted([lc_conid, sc_conid])
+            # Check for duplicates against all known orders
+            if (tuple(leg_ids), s.trigger_price) in known_order_identifiers:
+                print(f"--> Duplicate order detected for {s.lc_strike}/{s.sc_strike} @ {s.trigger_price}. Skipping.", flush=True)
+                continue
+
+            identifier = f"{UNDERLYING_SYMBOL}-{s.expiry}-{s.lc_strike}-{s.sc_strike}-{s.trigger_price}"
+            sig_hash = get_signal_hash(identifier)
+            contract = build_combo_contract(lc_conid, sc_conid)
+            order = build_staged_order(s, trigger_conid)
+            
+            # Stage the order and add it to our managed list
+            mo = stage_order(app, s, contract, order, sig_hash)
+            managed_orders.append(mo)
+            
+            # Also add its identifier to our set to prevent duplicates in the same batch
+            known_order_identifiers.add((tuple(leg_ids), s.trigger_price))
+
+        except Exception as e:
+            print(f"Could not process or stage signal {s}. Skipping. Error: {e}", flush=True)
+            continue
+
 def gather_signals() -> List[Signal]:
     signals: List[Signal] = []
     # Telegram
@@ -376,32 +422,7 @@ def main_loop():
                 app.disconnect(); return
 
             managed_orders: List[ManagedOrder] = []
-            for s in signals:
-                print(f"Processing signal: {json.dumps(s.__dict__)}", flush=True)
-                try:
-                    lc_conid = get_option_conid_with_retry(app, s.expiry, s.lc_strike, "C", attempts=3)
-                    sc_conid = get_option_conid_with_retry(app, s.expiry, s.sc_strike, "C", attempts=3)
-                except Exception as e:
-                    print(f"Could not get contract details for signal {s}. Skipping. Error: {e}", flush=True)
-                    continue
-                leg_ids = sorted([lc_conid, sc_conid])
-                if is_duplicate(leg_ids, s.trigger_price, existing_orders):
-                    print(f"--> Duplicate order detected for {s.lc_strike}/{s.sc_strike} @ {s.trigger_price}. Skipping.", flush=True)
-                    continue
-                identifier = f"{UNDERLYING_SYMBOL}-{s.expiry}-{s.lc_strike}-{s.sc_strike}-{s.trigger_price}"
-                sig_hash = get_signal_hash(identifier)
-                contract = build_combo_contract(lc_conid, sc_conid)
-                try:
-                    order = build_staged_order(s, trigger_conid)
-                except Exception as e:
-                    print(f"Invalid order for {s}: {e}. Skipping.", flush=True)
-                    continue
-                mo = stage_order(app, s, contract, order, sig_hash)
-                managed_orders.append(mo)
-
-            if not managed_orders:
-                print("No orders were staged (duplicates/invalid). Exiting.", flush=True)
-                app.disconnect(); return
+            process_and_stage_new_signals(app, signals, managed_orders, existing_orders, trigger_conid)
 
             tz = pytz.timezone('US/Eastern')
             market_open_time = get_trading_day_open(tz, day_selection)
@@ -423,6 +444,19 @@ def main_loop():
 
             # Start SPX price stream only after market is open
             start_spx_stream(app, req_id_start=100, tries=3)
+
+            # --- Post-open signal checks at 9:31 ---
+            print("--- Entering post-open signal monitoring phase ---", flush=True)
+
+            # Wait until 9:32:00
+            wait_time_931 = market_open_time.replace(minute=32, second=0)
+            print(f"Waiting until {wait_time_931.strftime('%H:%M:%S %Z')} to check for new signals...", flush=True)
+            time.sleep(max(0, (wait_time_931 - datetime.now(tz)).total_seconds()))
+
+            print("--- 9:32:00 AM: Fetching new signals... ---", flush=True)
+            signals_931 = gather_signals() # <-- Use await here
+            process_and_stage_new_signals(app, signals_931, managed_orders, existing_orders, trigger_conid)
+            print("--- Post-open signal checks complete. Monitoring for errors. ---", flush=True)
 
             # Post-place error retry loop
             run_error_retry_loop(app, managed_orders, market_close_time, tz)
