@@ -296,7 +296,7 @@ def process_and_stage_new_signals(app: IBKRApp, signals: List[Signal], managed_o
             print(f"Could not process or stage signal {s}. Skipping. Error: {e}", flush=True)
             continue
 
-def gather_signals() -> List[Signal]:
+def gather_signals(allow_manual_fallback: bool = True) -> List[Signal]:
     signals: List[Signal] = []
     # Telegram
     try:
@@ -310,8 +310,8 @@ def gather_signals() -> List[Signal]:
                     print(f"Skipping malformed Telegram signal {d}: {e}", flush=True)
     except Exception as e:
         print(f"Telegram fetch/parse error: {e}", flush=True)
-    # Manual fallback
-    if not signals:
+    # Manual fallback only if allowed
+    if not signals and allow_manual_fallback:
         manual = get_signal_interactively() or []
         for d in manual:
             try:
@@ -416,10 +416,7 @@ def main_loop():
             time.sleep(5)
             print("--------------------------", flush=True)
             print("Looking for new signals...", flush=True)
-            signals = gather_signals()
-            if not signals:
-                print("No new signals found from any source. Exiting.")
-                app.disconnect(); return
+            signals = gather_signals(allow_manual_fallback=True)
 
             managed_orders: List[ManagedOrder] = []
             process_and_stage_new_signals(app, signals, managed_orders, existing_orders, trigger_conid)
@@ -454,8 +451,8 @@ def main_loop():
             time.sleep(max(0, (wait_time_931 - datetime.now(tz)).total_seconds()))
 
             print("--- 9:32:00 AM: Fetching new signals... ---", flush=True)
-            signals_931 = gather_signals() # <-- Use await here
-            process_and_stage_new_signals(app, signals_931, managed_orders, existing_orders, trigger_conid)
+            signals_932 = gather_signals(allow_manual_fallback=False)
+            process_and_stage_new_signals(app, signals_932, managed_orders, existing_orders, trigger_conid)
             print("--- Post-open signal checks complete. Monitoring for errors. ---", flush=True)
 
             # Post-place error retry loop
