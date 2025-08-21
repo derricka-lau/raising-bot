@@ -12,7 +12,7 @@ def get_user_data_dir():
         path = Path(os.getenv("APPDATA")) / "RaisingBot"
     else: # macOS and other Unix-like
         path = Path.home() / "Library" / "Application Support" / "RaisingBot"
-    # The subprocess doesn't create the dir, it assumes the API server did.
+    path.mkdir(parents=True, exist_ok=True)
     return str(path)
 
 # Use the same logic as api.py to locate the config file

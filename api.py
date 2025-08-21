@@ -10,9 +10,10 @@ import json
 import subprocess
 import random
 import time
-from pathlib import Path # <-- Add this import
-import argparse # <-- Add this import
+from pathlib import Path
+import argparse
 import re
+from config import get_user_data_dir
 
 # --- INITIALIZE GLOBAL VARIABLES HERE ---
 _lock = threading.Lock()
@@ -28,15 +29,6 @@ def resource_path(relative_path):
     except Exception:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
-
-def get_user_data_dir():
-    """Get a writable directory for user data (config, logs, session)."""
-    if sys.platform == "win32":
-        path = Path(os.getenv("APPDATA")) / "RaisingBot"
-    else: # macOS and other Unix-like
-        path = Path.home() / "Library" / "Application Support" / "RaisingBot"
-    path.mkdir(parents=True, exist_ok=True)
-    return str(path)
 # --- END HELPER FUNCTIONS ---
 
 

@@ -5,10 +5,11 @@ import hashlib
 import re
 import csv
 import os
+import json
 from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
 
-from config import (TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_CHANNEL,
+from config import (TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_CHANNEL, get_user_data_dir,
                     DEFAULT_ORDER_TYPE, DEFAULT_LIMIT_PRICE, DEFAULT_STOP_PRICE,
                     UNDERLYING_SYMBOL, MULTI_SIGNAL_REGEX)
 
@@ -30,11 +31,15 @@ def get_signal_from_telegram():
         return None
 
     async def run():
-        session_file = 'session_name.session'
+        # --- Use the correct user data directory ---
+        USER_DATA_DIR = get_user_data_dir()
+        session_name_with_path = os.path.join(USER_DATA_DIR, 'session_name')
+        session_file = session_name_with_path + '.session'
         
         # ONLY try client.start() if session file exists AND we can verify it works
         if os.path.exists(session_file):
-            client = TelegramClient('session_name', int(TELEGRAM_API_ID), TELEGRAM_API_HASH)
+            # --- Use the full path for the client ---
+            client = TelegramClient(session_name_with_path, int(TELEGRAM_API_ID), TELEGRAM_API_HASH)
             try:
                 await client.start()
                 # Check if actually logged in
@@ -70,7 +75,10 @@ def get_signal_from_telegram():
         return None
 
 async def run_manual_login():
-    client = TelegramClient('session_name', int(TELEGRAM_API_ID), TELEGRAM_API_HASH)
+    # --- Use the correct user data directory here as well ---
+    USER_DATA_DIR = get_user_data_dir()
+    session_name_with_path = os.path.join(USER_DATA_DIR, 'session_name')
+    client = TelegramClient(session_name_with_path, int(TELEGRAM_API_ID), TELEGRAM_API_HASH)
     await client.connect()
     print("Enter your phone number (with country code, e.g. +85265778011):", flush=True)
     phone_number = input().strip()
