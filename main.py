@@ -452,6 +452,10 @@ def main_loop():
 
             print("--- 9:32:00 AM: Fetching new signals... ---", flush=True)
             signals_932 = gather_signals(allow_manual_fallback=False)
+            if not signals_932:
+                print("No signals found at 9:32:00. If you need to manually enter any signal again, please stop and rerun the bot.", flush=True)
+            else:
+                print(f"Found {len(signals_932)} signal(s) at 9:32:00.", flush=True)
             process_and_stage_new_signals(app, signals_932, managed_orders, existing_orders, trigger_conid)
             print("--- Post-open signal checks complete. Monitoring for errors. ---", flush=True)
 
