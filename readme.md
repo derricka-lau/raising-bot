@@ -61,11 +61,12 @@
 
 ## macOS Security Warning
 
-If you see a warning that "Apple could not verify 'RaisingBot' is free of malware":
+If you see a warning that "Apple could not verify 'xxx' is free of malware":
 
 1. Go to **System Settings > Privacy & Security**.
 2. Scroll down to **Security**.
-3. You should see a message about "RaisingBot" being blocked. Click **Open Anyway**.
+3. You should see a message about "xxx" being blocked. Click **Open Anyway**.
+4. You should expect this multiple times on the first run.
 4. Try opening the app again.
 
 This will allow you to run the app even if it is not from the App Store.
