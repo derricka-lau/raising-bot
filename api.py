@@ -14,6 +14,9 @@ from pathlib import Path
 import argparse
 import re
 from config import get_user_data_dir
+import eventlet
+
+eventlet.monkey_patch()
 
 # --- INITIALIZE GLOBAL VARIABLES HERE ---
 _lock = threading.Lock()
@@ -370,5 +373,5 @@ if __name__ == "__main__":
     else:
         if getattr(sys, 'frozen', False):
             threading.Timer(1.5, open_browser).start()
-        # Use socketio.run instead of app.run
-        socketio.run(app, host='127.0.0.1', port=9527, debug=False, allow_unsafe_werkzeug=True)
+        # Use eventlet for production server
+        socketio.run(app, host='127.0.0.1', port=9527, debug=False)
