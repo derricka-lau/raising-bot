@@ -25,7 +25,7 @@
 
 5. **How It Works**
    - The bot waits for market open.
-   - If SPX open price > trigger price, it checks Telegram signals again at 9:32.
+   - If SPX open price > trigger price, it places order accordingly. It then checks Telegram signals again at 9:32.
    - Any conflicting orders will be retried automatically until market close.
    - If you are not using Telegram and find a new signal after 9:31, please stop and rerun the bot, then enter the new signal.
 
@@ -51,9 +51,9 @@
 
 3. **操作流程**
    - 市場開市前等待。
-   - 若 SPX 開市價高於觸發價，會在 9:32 再檢查 Telegram 訊號。
-   - 有衝突的訂單會自動重試直到收市。
+   - 若 SPX 開市價高於觸發價，會根據設定自動下單，然後在 9:32 再檢查 Telegram 訊號。
    - 若你未使用 Telegram 並在 9:31 後發現新訊號，請停止並重新啟動機械人，然後輸入新訊號。
+   - 有撞腳的訂單會自動重試直到收市。
 
 ## macOS Security Warning
 
