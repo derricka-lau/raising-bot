@@ -75,7 +75,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ config, onFieldChange, onSave, 
                 onChange={(e) => onFieldChange(key, e.target.value)}
                 variant="outlined"
                 fullWidth
-                type={key === "TELEGRAM_API_HASH" ? "password" : "text"}
+                type={key === "TELEGRAM_API_HASH" || key === "TELEGRAM_API_ID" ? "password" : "text"}
               />
             )
           )}
