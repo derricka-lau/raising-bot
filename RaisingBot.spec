@@ -12,7 +12,6 @@ a = Analysis(
         ('main.py', '.'),                                 # The bot script
         ('config.py', '.'),                               # Your config logic
         ('signal_utils.py', '.'),                         # Your signal logic
-        ('config.json', '.')                              # The default config file
     ],
     hiddenimports=[
         # --- LIBRARIES FROM requirements.txt ---
