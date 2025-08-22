@@ -19,13 +19,13 @@
    - Fill in your IBKR account details on the **CONFIG** tab.
    - If you don’t set up Telegram, you’ll need to manually paste signals in the **BOT CONSOLE**.
 
-4. **Bot Console**
-   - If Telegram has no signal, you can manually enter the signal.
+4. **BOT CONSOLE**
+   - If Telegram has no signal, you can manually enter the untriggered signals.
    - The bot will show instructions and examples.
 
 5. **How It Works**
-   - The bot waits for market open.
-   - If SPX open price > trigger price, it places order accordingly. It then checks Telegram signals again at 9:32.
+   - The bot waits for market open with staged orders.
+   - If SPX open price <= trigger price, it transmits staged orders. It then checks Telegram signals again at 9:32.
    - Any conflicting orders will be retried automatically until market close.
    - If you are not using Telegram and find a new signal after 9:31, please stop and rerun the bot, then enter the new signal.
 
@@ -47,13 +47,17 @@
 
 2. **設定**
    - 在 **CONFIG** 頁填寫 IBKR 賬戶資料。
-   - 沒有 Telegram 訊號時，可在 **BOT CONSOLE** 手動輸入訊號。
+   - 如果你沒有設定 Telegram，則需要在 **BOT CONSOLE** 手動貼上訊號。
 
-3. **操作流程**
-   - 市場開市前等待。
-   - 若 SPX 開市價高於觸發價，會根據設定自動下單，然後在 9:32 再檢查 Telegram 訊號。
-   - 若你未使用 Telegram 並在 9:31 後發現新訊號，請停止並重新啟動機械人，然後輸入新訊號。
+3. **BOT CONSOLE**
+   - 當 Telegram 沒有訊號時，你可以手動輸入未觸發的訊號。
+   - 機械人會顯示指示和範例。
+
+4. **運作流程**
+   - 機械人會在市場開市前等待並準備預設訂單。
+   - 若 SPX 開市價<=觸發價，會傳送預設訂單，然後在 9:32 再檢查 Telegram 訊號。
    - 有撞腳的訂單會自動重試直到收市。
+   - 如果你未使用 Telegram 並在 9:31 後發現新訊號，請停止並重新啟動機械人，然後輸入新訊號。
 
 ## macOS Security Warning
 
