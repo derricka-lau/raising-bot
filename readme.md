@@ -11,7 +11,7 @@
    - Log in to your IBKR account and keep TWS running while using the bot.
 
 2. **Download and Run**
-   - Download the app zip from the [Releases page](https://github.com/your-username/raising-bot/releases).
+   - Download the app zip from the [Releases page](https://github.com/derricka-lau/raising-bot/releases) Assets.
    - Open the `.exe` (Windows) or `.app` (macOS) file.
    - The browser should open to `localhost:9527` automatically.
 
@@ -41,7 +41,7 @@
    - **請確保「Read-Only API」沒有被勾選**，這樣機械人才能下單。
    - 請保持 TWS 開啟並登入狀態。
 2. **下載及開啟**
-   - 從 [Releases page](https://github.com/your-username/raising-bot/releases) 下載程式。
+   - 從 [Releases page](https://github.com/derricka-lau/raising-bot/releases) Assets 下載程式。
    - 開啟 `.exe`（Windows）或 `.app`（macOS）。
    - 瀏覽器會自動打開 `localhost:9527`。
 
@@ -71,7 +71,7 @@ This will allow you to run the app even if it is not from the App Store.
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/your-username/raising-bot.git
+   git clone https://github.com/derricka-lau/raising-bot.git
    cd raising-bot/raising-bot
    ```
 
