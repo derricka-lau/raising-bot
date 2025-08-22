@@ -2,6 +2,8 @@ name: Build RaisingBot
 
 on:
   push:
+    tags:
+      - '*'
   workflow_dispatch:
 
 jobs:
@@ -31,7 +33,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: RaisingBot-mac
-          path: raising-bot/dist/
+          path: dist/
 
   build-windows:
     runs-on: windows-latest
@@ -63,4 +65,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: RaisingBot-windows
-          path: raising-bot/dist/
+          path: dist/
