@@ -72,11 +72,11 @@ jobs:
         run: |
           cd dist
           powershell Compress-Archive -Path RaisingBot -DestinationPath RaisingBot-windows.zip
-      - name: Upload Windows artifact for testing
+      - name: Upload artifact for testing
         uses: actions/upload-artifact@v4
         with:
           name: RaisingBot-windows
-          path: dist/RaisingBot/**
+          path: dist/
       - name: Upload ZIP to GitHub Release
         uses: softprops/action-gh-release@v2
         if: startsWith(github.ref, 'refs/tags/')
