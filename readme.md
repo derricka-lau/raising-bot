@@ -59,41 +59,76 @@ Follow these simple steps to get the bot running.
 
 ---
 
-## For Developers
+## How to Use
 
-If you want to run the project from the source code:
+1. **Download and Run**
+   - Download the zip from the [Releases page](https://github.com/your-username/raising-bot/releases).
+   - Open the `.exe` (Windows) or `.app` (macOS) file.
+   - The browser should open to `localhost:9527` automatically.
 
-**Prerequisites:**
--   Python 3.9+
--   Node.js 16+
+2. **Configure**
+   - Fill in your IBKR account details on the **CONFIG** tab.
+   - If you don’t set up Telegram, you’ll need to manually paste signals in the **BOT CONSOLE**.
 
-**Setup:**
-```bash
-# 1. Clone the repository
-git clone https://github.com/your-username/raising-bot.git
-cd raising-bot
+3. **Bot Console**
+   - If Telegram has no signal, you can manually enter the signal.
+   - The bot will show instructions and examples.
 
-# 2. Set up the Python backend
-python3 -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+4. **How It Works**
+   - The bot waits for market open.
+   - If SPX open price > trigger price, it checks Telegram signals again at 9:32.
+   - Any conflicting orders will be retried automatically until market close.
+   - If you are not using Telegram and find a new signal after 9:31, please stop and rerun the bot, then enter the new signal.
 
-# 3. Set up the React frontend
-cd raising-bot-web
-npm install
-npm run build
-cd ..
+---
 
-# 4. Run the application
-python api.py
-```
+## 中文簡介
 
-**To build the executable:**
-```bash
-# Make sure you are in the activated virtual environment
-pip install pyinstaller
+1. **下載及開啟**
+   - 從 [Releases page](https://github.com/your-username/raising-bot/releases) 下載程式。
+   - 開啟 `.exe`（Windows）或 `.app`（macOS）。
+   - 瀏覽器會自動打開 `localhost:9527`。
 
-# Build the app
-pyinstaller RaisingBot.spec
-```
-The final application will be
+2. **設定**
+   - 在 **CONFIG** 頁填寫 IBKR 賬戶資料。
+   - 沒有 Telegram 訊號時，可在 **BOT CONSOLE** 手動輸入訊號。
+
+3. **操作流程**
+   - 市場開市前等待。
+   - 若 SPX 開市價高於觸發價，會在 9:32 再檢查 Telegram 訊號。
+   - 有衝突的訂單會自動重試直到收市。
+   - 若你未使用 Telegram 並在 9:31 後發現新訊號，請停止並重新啟動機械人，然後輸入新訊號。
+
+---
+
+## Developer Guide (Python)
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/your-username/raising-bot.git
+   cd raising-bot/raising-bot
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+3. **Run the backend server:**
+   ```bash
+   python api.py
+   ```
+
+4. **Run the frontend (development mode):**
+   ```bash
+   cd raising-bot-web
+   npm install
+   npm run dev
+   ```
+
+5. **Build the executable (optional):**
+   ```bash
+   pyinstaller RaisingBot.spec
+   ```
+
+6. **Modify code as needed and restart the server to see changes.**
