@@ -55,7 +55,17 @@
    - 有衝突的訂單會自動重試直到收市。
    - 若你未使用 Telegram 並在 9:31 後發現新訊號，請停止並重新啟動機械人，然後輸入新訊號。
 
----
+## macOS Security Warning
+
+If you see a warning that "Apple could not verify 'RaisingBot' is free of malware":
+
+1. Go to **System Settings > Privacy & Security**.
+2. Scroll down to **Security**.
+3. You should see a message about "RaisingBot" being blocked. Click **Open Anyway**.
+4. Try opening the app again.
+
+This will allow you to run the app even if it is not from the App Store.
+
 
 ## Developer Guide (Python)
 
