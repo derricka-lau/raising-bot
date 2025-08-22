@@ -97,7 +97,7 @@ jobs:
         run: dir
       - name: Run EXE and show log
         run: |
-          .\RaisingBot\RaisingBot.exe
-          Start-Sleep -Seconds 30
+          Start-Job -ScriptBlock { .\RaisingBot\RaisingBot.exe }
+          Start-Sleep -Seconds 15
           curl http://127.0.0.1:9527/api/status
           Get-Job | Remove-Job -Force
