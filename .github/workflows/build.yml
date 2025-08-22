@@ -95,9 +95,10 @@ jobs:
           path: .
       - name: List files
         run: dir
-      - name: Run EXE and test
+      - name: Run EXE and show log
         run: |
-          Start-Job -ScriptBlock { .\RaisingBot\RaisingBot.exe }
-          Start-Sleep -Seconds 10
+          .\RaisingBot\RaisingBot.exe > bot_output.log 2>&1 &
+          Start-Sleep -Seconds 30
+          type bot_output.log
           curl http://127.0.0.1:9527/api/status
           Get-Job | Remove-Job -Force
