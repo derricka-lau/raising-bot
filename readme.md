@@ -1,80 +1,29 @@
 # Raising Order Management
 
-Raising Order Management is a simple desktop application that helps automate trading strategies on Interactive Brokers (IBKR). It listens for trading signals from a Telegram channel (or manual input) and automatically places orders based on pre-set conditions.
-
-## Features
-
--   **Simple Web Interface**: Configure and monitor the bot from your web browser.
--   **Automated order management**: Fetches signals and places orders automatically.
--   **Go/No-Go Logic**: Checks market conditions at open before transmitting orders.
--   **Prioritization**: Orders are automatically sorted to place the one with the lowest trigger price first.
--   **Automated Conflict Resolution**: If an order fails due to a conflict between strike prices in the provided signals, the bot actively monitors the market. It will automatically retry the failed order as soon as the live SPX price reaches the order's long call (LC) strike.
--   **Live Console**: See what the bot is doing in real-time.
--   **Cross-Platform**: Works on both macOS and Windows.
-
-
----
-
-## Installation and Usage
-
-Follow these simple steps to get the bot running.
-
-### Step 1: Download the Application
-
-1.  Go to the **[Releases Page](https://github.com/your-username/raising-bot/releases)** of this project.
-2.  Download the correct file for your operating system:
-    -   For **macOS**: `RaisingBot-macOS.zip`
-    -   For **Windows**: `RaisingBot-Windows.zip`
-
-### Step 2: Run the Application
-
-**On macOS:**
-1.  Unzip the downloaded file.
-2.  Drag `RaisingBot.app` to your `Applications` folder.
-3.  The first time you run it, you may need to **right-click** the app and select **Open**.
-4.  A new tab will open in your web browser.
-
-**On Windows:**
-1.  Unzip the downloaded file.
-2.  Open the new folder and double-click `RaisingBot.exe`.
-3.  A new tab will open in your web browser.
-
-### Step 3: Configure the Bot
-
-1.  Before starting the bot, make sure **IBKR Trader Workstation (TWS) or Gateway** is running and you are logged in.
-2.  In the browser window that opened, click on the **CONFIG** tab.
-3.  Fill in the required fields:
-    -   **IBKR Account Number**: Your account ID (e.g., `U1234567`).
-    -   **IBKR Port**: The port TWS/Gateway is using. (Default is `7496` for live accounts, `7497` for paper accounts).
-    -   **IBKR Client ID**: A random number (e.g., `144`) that is not being used by another API program.
-4.  (Optional) If you want to get signals from Telegram, fill in the `TELEGRAM_API_ID`, `TELEGRAM_API_HASH`, and `TELEGRAM_CHANNEL`.
-5.  Click **Save Config**.
-
-### Step 4: Start the Bot
-
-1.  Click on the **BOT CONSOLE** tab.
-2.  Click the **START BOT** button.
-3.  The console will show the bot's status. If Telegram is not configured, it will ask you to paste the signal text directly into the input box.
-4.  To stop the bot at any time, click the **STOP BOT** button.
-
----
-
 ## How to Use
 
-1. **Download and Run**
-   - Download the zip from the [Releases page](https://github.com/your-username/raising-bot/releases).
+1. **TWS (Trader Workstation)**
+   - Download IBKR Trader Workstation (TWS) from [Interactive Brokers official site](https://www.interactivebrokers.com/en/index.php?f=16040).
+   - Install and open TWS.
+   - In TWS, go to **Edit > Global Configuration > API > Settings**.
+   - Enable **"Enable ActiveX and Socket Clients"** and set the port (default is 7496 for live, 7497 for paper).
+   - **Make sure "Read-Only API" is unchecked** so the bot can place orders.
+   - Log in to your IBKR account and keep TWS running while using the bot.
+
+2. **Download and Run**
+   - Download the app zip from the [Releases page](https://github.com/your-username/raising-bot/releases).
    - Open the `.exe` (Windows) or `.app` (macOS) file.
    - The browser should open to `localhost:9527` automatically.
 
-2. **Configure**
+3. **Configure**
    - Fill in your IBKR account details on the **CONFIG** tab.
    - If you don’t set up Telegram, you’ll need to manually paste signals in the **BOT CONSOLE**.
 
-3. **Bot Console**
+4. **Bot Console**
    - If Telegram has no signal, you can manually enter the signal.
    - The bot will show instructions and examples.
 
-4. **How It Works**
+5. **How It Works**
    - The bot waits for market open.
    - If SPX open price > trigger price, it checks Telegram signals again at 9:32.
    - Any conflicting orders will be retried automatically until market close.
@@ -84,7 +33,14 @@ Follow these simple steps to get the bot running.
 
 ## 中文簡介
 
-1. **下載及開啟**
+1. **TWS（IBKR 交易工作站）**
+   - 請先到 [IBKR 官方網站](https://www.interactivebrokers.com/en/index.php?f=16040) 下載並安裝 Trader Workstation (TWS)。
+   - 開啟 TWS，並登入您的 IBKR 帳戶。
+   - 在 TWS 中，前往 **Edit > Global Configuration > API > Settings**。
+   - 勾選 **"Enable ActiveX and Socket Clients"**，並設定端口（預設 7496 為真實帳戶，7497 為模擬帳戶）。
+   - **請確保「Read-Only API」沒有被勾選**，這樣機械人才能下單。
+   - 請保持 TWS 開啟並登入狀態。
+2. **下載及開啟**
    - 從 [Releases page](https://github.com/your-username/raising-bot/releases) 下載程式。
    - 開啟 `.exe`（Windows）或 `.app`（macOS）。
    - 瀏覽器會自動打開 `localhost:9527`。
