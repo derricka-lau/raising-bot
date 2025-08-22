@@ -8,12 +8,11 @@ const ORDER_TYPES = [
 const CONFIG_FIELDS = [
   { key: "IBKR_ACCOUNT", label: "IBKR Account Number", required: true },
   { key: "IBKR_PORT", label: "IBKR Port", required: true, helper: "Live account is 7496, Paper account is 7497, please confirm it yourself" },
-  { key: "TELEGRAM_API_ID", label: "Telegram API ID", required: false, helper: "Optional" },
-  { key: "TELEGRAM_API_HASH", label: "Telegram API Hash", required: false, helper: "Optional" },
-  { key: "TELEGRAM_CHANNEL", label: "Telegram Channel", required: false, helper: "Optional" },
+  { key: "TELEGRAM_API_ID", label: "Telegram API ID", required: false },
+  { key: "TELEGRAM_API_HASH", label: "Telegram API Hash", required: false },
+  { key: "TELEGRAM_CHANNEL", label: "Telegram Channel", required: false, helper: "Optional, e.g. @RaisingCycle_Notification_bot" },
   { key: "IBKR_HOST", label: "IBKR Host", required: true, helper: "Usually '127.0.0.1'" },
   { key: "IBKR_CLIENT_ID", label: "IBKR Client ID", required: true, helper: "Just put in a random number" },
-  { key: "DEFAULT_ORDER_TYPE", label: "Default Order Type", required: true, helper: "Choose a valid IBKR order type" },
   { key: "SNAPMID_OFFSET", label: "SnapMid Offset", required: true, helper: "Offset for SnapMid orders" },
 ];
 
@@ -71,7 +70,22 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ config, onFieldChange, onSave, 
                 label={label}
                 value={config[key] || ""}
                 required={required}
-                helperText={helper}
+                helperText={
+                  key === "TELEGRAM_API_ID" || key === "TELEGRAM_API_HASH"
+                    ? (
+                        <span>
+                          Optional, see&nbsp;
+                          <a
+                            href="https://core.telegram.org/api/obtaining_api_id"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            Telegram API documentation (Obtaining api_id)
+                          </a>
+                        </span>
+                      )
+                    : helper
+                }
                 onChange={(e) => onFieldChange(key, e.target.value)}
                 variant="outlined"
                 fullWidth
