@@ -69,3 +69,19 @@ jobs:
         with:
           name: RaisingBot-windows
           path: dist/
+
+  test-windows:
+    runs-on: windows-latest
+    needs: build-windows
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download EXE artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: RaisingBot-windows
+          path: .
+      - name: List files
+        run: dir
+      - name: Run EXE
+        run: |
+          .\dist\RaisingBot.exe
