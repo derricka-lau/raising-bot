@@ -371,4 +371,4 @@ if __name__ == "__main__":
         if getattr(sys, 'frozen', False):
             threading.Timer(1.5, open_browser).start()
         # Use socketio.run instead of app.run
-        socketio.run(app, host='127.0.0.1', port=9527, debug=False)
+        socketio.run(app, host='127.0.0.1', port=9527, debug=False, allow_unsafe_werkzeug=True)
