@@ -380,9 +380,9 @@ def main_loop():
             time.sleep(2)  # Give some time for the app to settle
             asyncio.run(wait_until_market_open(market_open_time, app.tz))
 
-            # Wait 1 second(s) after market open for IBKR to publish the open bar
-            print("Waiting 1 second(s) after market open for IBKR to publish the official open price...", flush=True)
-            time.sleep(1)
+            # Wait 3 second(s) after market open for IBKR to publish the open bar
+            print("Waiting 3 second(s) after market open for IBKR to publish the official open price...", flush=True)
+            time.sleep(3)
 
             open_px = fetch_open_price_with_retry(app, UNDERLYING_SYMBOL, attempts=5, wait_secs=10)
             if open_px is None:
