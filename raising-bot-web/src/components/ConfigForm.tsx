@@ -14,7 +14,8 @@ const CONFIG_FIELDS = [
   { key: "IBKR_HOST", label: "IBKR Host", required: true, helper: "Usually '127.0.0.1'" },
   { key: "IBKR_CLIENT_ID", label: "IBKR Client ID", required: true, helper: "Just put in a random number" },
   { key: "SNAPMID_OFFSET", label: "SnapMid Offset", required: true, helper: "Offset for SnapMid orders" },
-  { key: "DEFAULT_ORDER_TYPE", label: "Default Order Type", required: true, helper: "Choose a valid IBKR order type" }
+  { key: "DEFAULT_ORDER_TYPE", label: "Default Order Type", required: true, helper: "Choose a valid IBKR order type" },
+  { key: "WAIT_AFTER_OPEN_SECONDS", label: "Wait After Open (seconds)", required: false, helper: "Seconds to wait after market open before fetching SPX open price. Increase if there is latency or low liquidity." }
 ];
 
 interface ConfigFormProps {
@@ -106,6 +107,16 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ config, onFieldChange, onSave, 
               helperText="Required for LMT orders"
             />
           )}
+          <TextField
+            label="Wait After Open (seconds)"
+            name="WAIT_AFTER_OPEN_SECONDS"
+            type="number"
+            value={config.WAIT_AFTER_OPEN_SECONDS ?? 3}
+            onChange={(e) => onFieldChange("WAIT_AFTER_OPEN_SECONDS", e.target.value)}
+            InputProps={{ inputProps: { min: 1, max: 30 } }}
+            helperText="Seconds to wait after market open before fetching SPX open price."
+            fullWidth
+          />
           <Box>
             <Button
               variant="contained"

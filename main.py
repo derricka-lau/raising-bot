@@ -12,6 +12,7 @@ import argparse # 1. Import argparse
 import json
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
+from config import WAIT_AFTER_OPEN_SECONDS
 
 from config import (IBKR_HOST, IBKR_PORT, IBKR_CLIENT_ID, 
                     UNDERLYING_SYMBOL, IBKR_ACCOUNT, SNAPMID_OFFSET)
@@ -380,9 +381,9 @@ def main_loop():
             time.sleep(2)  # Give some time for the app to settle
             asyncio.run(wait_until_market_open(market_open_time, app.tz))
 
-            # Wait 3 second(s) after market open for IBKR to publish the open bar
-            print("Waiting 3 second(s) after market open for IBKR to publish the official open price...", flush=True)
-            time.sleep(3)
+            # Wait WAIT_AFTER_OPEN_SECONDS second(s) after market open for IBKR to publish the open bar
+            print(f"Waiting {WAIT_AFTER_OPEN_SECONDS} second(s) after market open for IBKR to publish the official open price...", flush=True)
+            time.sleep(int(WAIT_AFTER_OPEN_SECONDS))
 
             open_px = fetch_open_price_with_retry(app, UNDERLYING_SYMBOL, attempts=5, wait_secs=10)
             if open_px is None:

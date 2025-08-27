@@ -33,7 +33,8 @@ CONFIG_DEFAULTS = {
     "DEFAULT_ORDER_TYPE": "SNAP MID",
     "DEFAULT_LIMIT_PRICE": None,
     "DEFAULT_STOP_PRICE": None,
-    "SNAPMID_OFFSET": 0.1
+    "SNAPMID_OFFSET": 0.1,
+    "WAIT_AFTER_OPEN_SECONDS": 3,  # Default wait time after market open
 }
 
 config_data = CONFIG_DEFAULTS.copy()
@@ -57,3 +58,4 @@ DEFAULT_ORDER_TYPE = config_data.get("DEFAULT_ORDER_TYPE")
 SNAPMID_OFFSET = float(config_data.get("SNAPMID_OFFSET"))
 DEFAULT_LIMIT_PRICE = float(config_data.get("DEFAULT_LIMIT_PRICE")) if config_data.get("DEFAULT_LIMIT_PRICE") not in (None, "", "None") else None
 DEFAULT_STOP_PRICE = float(config_data.get("DEFAULT_STOP_PRICE")) if config_data.get("DEFAULT_STOP_PRICE") not in (None, "", "None") else None
+WAIT_AFTER_OPEN_SECONDS = int(config_data.get("WAIT_AFTER_OPEN_SECONDS", 3))
