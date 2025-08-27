@@ -353,6 +353,23 @@ def serve(path):
     else:
         return app.send_static_file("index.html")
 
+@app.route("/api/history")
+def get_history():
+    date_str = request.args.get("date")  # Format: YYYY-MM-DD
+    if not date_str:
+        return jsonify({"history": []})
+    try:
+        with open(LOG_FILE, "r") as f:
+            lines = f.readlines()
+        if date_str:
+            # Filter lines by date prefix, e.g. [TS:2025-08-27 ...]
+            filtered = [line.rstrip() for line in lines if line.startswith(f"[TS:{date_str}")]
+        else:
+            filtered = [line.rstrip() for line in lines]
+        return jsonify({"history": filtered})
+    except Exception:
+        return jsonify({"history": []})
+
 # --- ADD THIS BROWSER-OPENING LOGIC AT THE VERY END ---
 def open_browser():
     # Opens the browser to your app after a short delay
@@ -371,4 +388,4 @@ if __name__ == "__main__":
         if getattr(sys, 'frozen', False):
             threading.Timer(1.5, open_browser).start()
         # Use socketio.run instead of app.run
-        socketio.run(app, host='127.0.0.1', port=9527, debug=False, allow_unsafe_werkzeug=True)
+        socketio.run(app, host='0.0.0.0', port=9527, debug=False, allow_unsafe_werkzeug=True)

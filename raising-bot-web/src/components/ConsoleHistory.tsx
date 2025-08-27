@@ -1,22 +1,42 @@
-import React from "react";
-import { Box, Typography } from "@mui/material";
+import React, { useEffect, useState } from "react";
+import { Box, Typography, TextField } from "@mui/material";
 import { stripTimestamp } from "../utils/consoleUtils";
 
-interface ConsoleHistoryProps {
-  output: string[];
-}
+const todayStr = new Date().toISOString().slice(0, 10);
 
-const ConsoleHistory: React.FC<ConsoleHistoryProps> = ({ output }) => {
-  // Remove countdown lines from history (keep only non-countdown lines)
-  const filteredOutput = output.filter(
-    (line) => !stripTimestamp(line).startsWith("Waiting for market open:") && !stripTimestamp(line).startsWith("Live SPX Price:")
-  );
+const ConsoleHistory: React.FC = () => {
+  const [history, setHistory] = useState<string[]>([]);
+  const [date, setDate] = useState<string>(todayStr); // Default to today
+
+  useEffect(() => {
+    const params = date ? `?date=${date}` : "";
+    fetch(`/api/history${params}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setHistory(
+          data.history.filter(
+            (line: string) =>
+              !stripTimestamp(line).startsWith("Waiting for market open:") &&
+              !stripTimestamp(line).startsWith("Live SPX Price:")
+          )
+        );
+      });
+  }, [date]);
 
   return (
     <Box>
       <Typography variant="h6" gutterBottom>
         Console History
       </Typography>
+      <TextField
+        label="Filter by date"
+        type="date"
+        size="small"
+        value={date}
+        onChange={(e) => setDate(e.target.value)}
+        sx={{ mb: 2 }}
+        InputLabelProps={{ shrink: true }}
+      />
       <Box
         sx={{
           background: "#fafafa",
@@ -28,10 +48,10 @@ const ConsoleHistory: React.FC<ConsoleHistoryProps> = ({ output }) => {
           fontSize: 15,
         }}
       >
-        {filteredOutput.length === 0 ? (
+        {history.length === 0 ? (
           <Typography color="grey.600">No history yet.</Typography>
         ) : (
-          filteredOutput.map((line, i) => (
+          history.map((line, i) => (
             <Box key={i} sx={{ mb: 1 }}>
               {line}
             </Box>

@@ -2,6 +2,8 @@
 
 import threading
 import time
+
+from flask import app
 import print_utils
 from datetime import datetime, timedelta
 import pytz
@@ -13,27 +15,13 @@ from typing import List, Optional, Tuple
 
 from config import (IBKR_HOST, IBKR_PORT, IBKR_CLIENT_ID, 
                     UNDERLYING_SYMBOL, IBKR_ACCOUNT, SNAPMID_OFFSET)
-from signal_utils import (get_signal_from_telegram, parse_multi_signal_message, 
-                          get_signal_interactively, 
-                          get_signal_hash)
+from signal_utils import (Signal, gather_signals, get_signal_hash)
 from ibkr_app import IBKRApp
 
 from ibapi.contract import ComboLeg, Contract
 from ibapi.order import Order
 from ibapi.order_condition import Create, OrderCondition
 from ibapi.execution import ExecutionFilter
-
-@dataclass
-class Signal:
-    expiry: str
-    lc_strike: float
-    sc_strike: float
-    trigger_price: float
-    order_type: str
-    lmt_price: Optional[float] = None
-    stop_price: Optional[float] = None
-    snapmid_offset: Optional[float] = None
-
 @dataclass
 class ManagedOrder:
     id: int
@@ -116,10 +104,11 @@ async def wait_until_market_open(market_open_time, tz):
         seconds_left = (market_open_time - now).total_seconds()
         if seconds_left <= 0:
             break
-        mins, secs = divmod(int(seconds_left), 60)
-        print(f"Waiting for market open: {mins:02d}:{secs:02d} remaining...", flush=True)
+        hours, remainder = divmod(int(seconds_left), 3600)
+        mins, secs = divmod(remainder, 60)
+        print(f"Waiting for market open: {hours:02d}:{mins:02d}:{secs:02d} remaining...", flush=True)
         await asyncio.sleep(1)
-    print("Market open reached!", flush=True)
+    print("Market is open!", flush=True)
 
 def process_managed_orders(app, managed_orders, underlying_symbol):
     """
@@ -134,18 +123,6 @@ def process_managed_orders(app, managed_orders, underlying_symbol):
             final_order = order_info.order_obj
             final_order.transmit = True
             app.placeOrder(order_info.id, order_info.contract, final_order)
-
-def to_signal(d: dict) -> Signal:
-    return Signal(
-        expiry=str(d["expiry"]),
-        lc_strike=float(d["lc_strike"]),
-        sc_strike=float(d["sc_strike"]),
-        trigger_price=float(d["trigger_price"]),
-        order_type=str(d["order_type"]),
-        lmt_price=(None if d.get("lmt_price") in (None, "", "None") else float(d["lmt_price"])),
-        stop_price=(None if d.get("stop_price") in (None, "", "None") else float(d["stop_price"])),
-        snapmid_offset=(None if d.get("snapmid_offset") in (None, "", "None") else float(d.get("snapmid_offset", SNAPMID_OFFSET))),
-    )
 
 def fetch_existing_orders(app: IBKRApp) -> List[dict]:
     """Fetches only the currently open orders."""
@@ -296,30 +273,6 @@ def process_and_stage_new_signals(app: IBKRApp, signals: List[Signal], managed_o
             print(f"Could not process or stage signal {s}. Skipping. Error: {e}", flush=True)
             continue
 
-def gather_signals(allow_manual_fallback: bool = True) -> List[Signal]:
-    signals: List[Signal] = []
-    # Telegram
-    try:
-        txt = get_signal_from_telegram()
-        if txt:
-            parsed = parse_multi_signal_message(txt) or []
-            for d in parsed:
-                try:
-                    signals.append(to_signal(d))
-                except Exception as e:
-                    print(f"Skipping malformed Telegram signal {d}: {e}", flush=True)
-    except Exception as e:
-        print(f"Telegram fetch/parse error: {e}", flush=True)
-    # Manual fallback only if allowed
-    if not signals and allow_manual_fallback:
-        manual = get_signal_interactively() or []
-        for d in manual:
-            try:
-                signals.append(to_signal(d))
-            except Exception as e:
-                print(f"Skipping malformed manual signal {d}: {e}")
-    return signals
-
 def fetch_open_price_with_retry(app: IBKRApp, symbol: str, attempts: int = 5, wait_secs: int = 10) -> Optional[float]:
     underlying_contract = Contract(); underlying_contract.symbol = symbol; underlying_contract.secType = "IND"; underlying_contract.currency = "USD"; underlying_contract.exchange = "CBOE"
     for i in range(1, attempts + 1):
@@ -380,12 +333,11 @@ def main_loop():
     )
     args = parser.parse_args()
     day_selection = args.check_day
-
-    # Use the client ID from args if provided, otherwise from config
     client_id_to_use = args.client_id if args.client_id is not None else IBKR_CLIENT_ID
 
-    while True: # <-- Add a master loop for reconnection
+    while True:  # <-- This keeps your bot running 24/7
         app = IBKRApp()
+        app.tz = pytz.timezone('US/Eastern')
         if not hasattr(app, "executions_event"):
             app.executions_event = threading.Event()
 
@@ -421,14 +373,16 @@ def main_loop():
             managed_orders: List[ManagedOrder] = []
             process_and_stage_new_signals(app, signals, managed_orders, existing_orders, trigger_conid)
 
-            tz = pytz.timezone('US/Eastern')
-            market_open_time = get_trading_day_open(tz, day_selection)
-            market_close_time = market_open_time.replace(hour=16, minute=0, second=0, microsecond=0)
-
+            market_open_time = get_trading_day_open(app.tz, day_selection)
+            app.market_close_time = market_open_time.replace(hour=16, minute=0, second=0, microsecond=0)
             print(f"Scheduled market open check for '{day_selection}' open: {market_open_time.strftime('%Y-%m-%d %H:%M:%S %Z')}", flush=True)
             print(f"Staged {len(managed_orders)} order(s). Waiting for market open...", flush=True)
             time.sleep(2)  # Give some time for the app to settle
-            asyncio.run(wait_until_market_open(market_open_time, tz))
+            asyncio.run(wait_until_market_open(market_open_time, app.tz))
+
+            # Wait 1 second(s) after market open for IBKR to publish the open bar
+            print("Waiting 1 second(s) after market open for IBKR to publish the official open price...", flush=True)
+            time.sleep(1)
 
             open_px = fetch_open_price_with_retry(app, UNDERLYING_SYMBOL, attempts=5, wait_secs=10)
             if open_px is None:
@@ -448,7 +402,7 @@ def main_loop():
             # Wait until 9:32:00
             wait_time_931 = market_open_time.replace(minute=32, second=0)
             print(f"Waiting until {wait_time_931.strftime('%H:%M:%S %Z')} to check for new signals...", flush=True)
-            time.sleep(max(0, (wait_time_931 - datetime.now(tz)).total_seconds()))
+            time.sleep(max(0, (wait_time_931 - datetime.now(app.tz)).total_seconds()))
 
             print("--- 9:32:00 AM: Fetching new signals... ---", flush=True)
             signals_932 = gather_signals(allow_manual_fallback=False)
@@ -460,19 +414,32 @@ def main_loop():
             print("--- Post-open signal checks complete. Monitoring for errors. ---", flush=True)
 
             # Post-place error retry loop
-            run_error_retry_loop(app, managed_orders, market_close_time, tz)
+            run_error_retry_loop(app, managed_orders, app.market_close_time, app.tz)
 
             # If the script completes normally, we can break the loop.
             print("Script has completed its automated tasks.", flush=True)
-            break
+
+            while datetime.now(app.tz) < app.market_close_time:
+                time.sleep(60)
+
+            print("Market close reached. Sleeping until next trading day...", flush=True)
+            app.disconnect()  # <-- Disconnect from IBKR after market close
+            now = datetime.now(app.tz)
+            # Calculate next midnight (00:00) US/Eastern
+            next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+            sleep_seconds = (next_midnight - now).total_seconds()
+            print(f"Sleeping for {int(sleep_seconds)} seconds until {next_midnight.strftime('%Y-%m-%d %H:%M:%S %Z')}", flush=True)
+            time.sleep(max(1, sleep_seconds))
+            print("Waking up for new trading day.", flush=True)
+            # The loop will restart and run the next day's logic
 
         except Exception as e:
             print(f"An error occurred in the main processing loop: {e}", flush=True)
             time.sleep(60)  # Wait before retrying the whole process
 
-    app.cancelMktData(100)
-    time.sleep(2)
-    app.disconnect()
+    # app.cancelMktData(100)
+    # time.sleep(2)
+    # app.disconnect()
 
 if __name__ == "__main__":
     main_loop()

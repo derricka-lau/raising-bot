@@ -21,7 +21,7 @@ class IBKRApp(EWrapper, EClient):
         self.current_spx_price = None
         self.lastConId = None
         self.open_orders = []
-        self.nextReqId = 1  # Start from 1 or any number
+        self.nextReqId = 1
         # --- Add threading events for synchronization ---
         self.connected_event = threading.Event()
         self.open_orders_event = threading.Event()
@@ -29,6 +29,9 @@ class IBKRApp(EWrapper, EClient):
         self.contract_details_event = threading.Event()
         self.order_status_event = threading.Event()
         self.error_order_ids = []
+        # --- Add these fields for countdown ---
+        self.market_close_time = None
+        self.tz = None
 
     def nextValidId(self, orderId: int):
         super().nextValidId(orderId)
@@ -51,7 +54,17 @@ class IBKRApp(EWrapper, EClient):
         # tickType 4 is 'LAST_PRICE'
         if reqId == 100 and tickType == 4: # Use a dedicated reqId for the SPX stream
             self.current_spx_price = price
-            print(f"Live SPX Price: {self.current_spx_price}", flush=True)
+            if hasattr(self, "market_close_time") and hasattr(self, "tz"):
+                now = datetime.now(self.tz)
+                seconds_left = int((self.market_close_time - now).total_seconds())
+                if seconds_left > 0:
+                    hours, remainder = divmod(seconds_left, 3600)
+                    mins, secs = divmod(remainder, 60)
+                    print(f"Live SPX Price: {self.current_spx_price} | Market Close Countdown: {hours:02d}:{mins:02d}:{secs:02d}", flush=True)
+                else:
+                    print(f"Live SPX Price: {self.current_spx_price} | Market closed | Countdown: 00:00:00", flush=True)
+            else:
+                print(f"Live SPX Price: {self.current_spx_price}", flush=True)
 
     def historicalData(self, reqId, bar):
         if reqId == self.REQID_HISTORICAL_OPEN:

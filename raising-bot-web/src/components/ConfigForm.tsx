@@ -14,6 +14,7 @@ const CONFIG_FIELDS = [
   { key: "IBKR_HOST", label: "IBKR Host", required: true, helper: "Usually '127.0.0.1'" },
   { key: "IBKR_CLIENT_ID", label: "IBKR Client ID", required: true, helper: "Just put in a random number" },
   { key: "SNAPMID_OFFSET", label: "SnapMid Offset", required: true, helper: "Offset for SnapMid orders" },
+  { key: "DEFAULT_ORDER_TYPE", label: "Default Order Type", required: true, helper: "Choose a valid IBKR order type" }
 ];
 
 interface ConfigFormProps {
@@ -105,39 +106,6 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ config, onFieldChange, onSave, 
               helperText="Required for LMT orders"
             />
           )}
-          {/* {orderType === "STP" && (
-            <TextField
-              label="Default Stop Price"
-              value={config.DEFAULT_STOP_PRICE || ""}
-              required
-              onChange={(e) => onFieldChange("DEFAULT_STOP_PRICE", e.target.value)}
-              variant="outlined"
-              fullWidth
-              helperText="Required for STP orders"
-            />
-          )}
-          {orderType === "STP LMT" && (
-            <>
-              <TextField
-                label="Default Limit Price"
-                value={config.DEFAULT_LIMIT_PRICE || ""}
-                required
-                onChange={(e) => onFieldChange("DEFAULT_LIMIT_PRICE", e.target.value)}
-                variant="outlined"
-                fullWidth
-                helperText="Required for STP LMT orders"
-              />
-              <TextField
-                label="Default Stop Price"
-                value={config.DEFAULT_STOP_PRICE || ""}
-                required
-                onChange={(e) => onFieldChange("DEFAULT_STOP_PRICE", e.target.value)}
-                variant="outlined"
-                fullWidth
-                helperText="Required for STP LMT orders"
-              />
-            </>
-          )} */}
           <Box>
             <Button
               variant="contained"

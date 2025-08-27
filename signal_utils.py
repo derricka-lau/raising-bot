@@ -3,15 +3,27 @@
 import asyncio
 import hashlib
 import re
-import csv
 import os
-import json
+import requests
 from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
-
+from datetime import datetime
+from typing import List
 from config import (TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_CHANNEL, get_user_data_dir,
-                    DEFAULT_ORDER_TYPE, DEFAULT_LIMIT_PRICE, DEFAULT_STOP_PRICE,
-                    UNDERLYING_SYMBOL, MULTI_SIGNAL_REGEX)
+                    DEFAULT_ORDER_TYPE, DEFAULT_LIMIT_PRICE, DEFAULT_STOP_PRICE, MULTI_SIGNAL_REGEX, SNAPMID_OFFSET)
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class Signal:
+    expiry: str
+    lc_strike: float
+    sc_strike: float
+    trigger_price: float
+    order_type: str
+    lmt_price: Optional[float] = None
+    stop_price: Optional[float] = None
+    snapmid_offset: Optional[float] = None
 
 # --- Hash and Record-Keeping Functions (Unchanged) ---
 def get_signal_hash(text): return hashlib.sha256(text.encode()).hexdigest()
@@ -152,4 +164,43 @@ def get_signal_interactively():
         else:
             print("Could not find any valid, untriggered signals in the pasted message.", flush=True)
     else: print("No message pasted.", flush=True)
+
+def gather_signals(allow_manual_fallback: bool = True) -> List[Signal]:
+    signals: List[Signal] = []
+
+    # 1If no signals, try Telegram
+    if not signals:
+        try:
+            txt = get_signal_from_telegram()
+            if txt:
+                parsed = parse_multi_signal_message(txt) or []
+                for d in parsed:
+                    try:
+                        signals.append(to_signal(d))
+                    except Exception as e:
+                        print(f"Skipping malformed Telegram signal {d}: {e}", flush=True)
+        except Exception as e:
+            print(f"Telegram fetch/parse error: {e}", flush=True)
+
+    # 2. Manual fallback only if allowed
+    if not signals and allow_manual_fallback:
+        manual = get_signal_interactively() or []
+        for d in manual:
+            try:
+                signals.append(to_signal(d))
+            except Exception as e:
+                print(f"Skipping malformed manual signal {d}: {e}")
+    return signals
+
+def to_signal(d: dict) -> Signal:
+    return Signal(
+        expiry=str(d["expiry"]),
+        lc_strike=float(d["lc_strike"]),
+        sc_strike=float(d["sc_strike"]),
+        trigger_price=float(d["trigger_price"]),
+        order_type=str(d["order_type"]),
+        lmt_price=(None if d.get("lmt_price") in (None, "", "None") else float(d["lmt_price"])),
+        stop_price=(None if d.get("stop_price") in (None, "", "None") else float(d["stop_price"])),
+        snapmid_offset=(None if d.get("snapmid_offset") in (None, "", "None") else float(d.get("snapmid_offset", SNAPMID_OFFSET))),
+    )
 
