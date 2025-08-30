@@ -22,6 +22,7 @@
 4. **BOT CONSOLE**
    - If Telegram has no signal, you can manually enter the untriggered signals.
    - The bot will show instructions and examples.
+   - **Note:** When you enter a signal, the bot will automatically adjust the expiry date to the most recent valid US trading day if the expiry date you provide is a holiday or non-trading day.
 
 5. **How It Works**
    - The bot stages all orders before market open, checking for duplicates against existing TWS orders and current session orders.
@@ -59,6 +60,7 @@
 4. **BOT CONSOLE**
    - 當 Telegram 沒有訊號時，你可以手動輸入未觸發的訊號。
    - 機械人會顯示指示和範例。
+   - **注意：** 當你輸入訊號後，如果你提供的到期日是假期或非交易日，機械人會自動將到期日調整為最近的有效美國交易日。
 
 5. **運作流程**
    - 機械人會在市場開市前預先準備所有訂單，並檢查是否有重複（包括 TWS 已存在訂單和本次會話訂單）。
