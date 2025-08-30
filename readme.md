@@ -27,13 +27,13 @@
    - The bot stages all orders before market open, checking for duplicates against existing TWS orders and current session orders.
    - At market open, it fetches the official SPX open price.
    - If the SPX open price is **less than or equal to the trigger price**, staged orders are transmitted; otherwise, they are cancelled.
-   - At 9:32 AM, the bot checks for new signals (from Telegram or manual entry) and stages any additional valid orders.
+   - At 9:32 AM, the bot checks for new signals from Telegram and stages any additional valid orders.
+   - **If you are not using Telegram and receive a new signal after 9:31, please stop and restart the bot, then enter the new signal manually.**
    - After open, the bot continuously monitors for errors and failed signals:
      - **Error orders** (e.g., conflicting strikes or rejected orders) are automatically retried when market conditions are met.
      - **Failed signals** (e.g., missing contract IDs or strikes too far OTM) are retried, including logic to adjust strikes (+5/-5) if needed.
      - All retries include duplicate checks to prevent submitting the same order twice.
    - The bot loops every second, ensuring orders are submitted as soon as conditions are met, until market close.
-   - If you are not using Telegram and find a new signal after 9:31, please stop and rerun the bot, then enter the new signal.
 
 ---
 
@@ -46,30 +46,31 @@
    - 勾選 **"Enable ActiveX and Socket Clients"**，並設定端口（預設 7496 為真實帳戶，7497 為模擬帳戶）。
    - **請確保「Read-Only API」沒有被勾選**，這樣機械人才能下單。
    - 請保持 TWS 開啟並登入狀態。
+
 2. **下載及開啟**
    - 從 [Releases page](https://github.com/derricka-lau/raising-bot/releases) Assets 下載程式。
    - 開啟 `.exe`（Windows）或 `.app`（macOS）。
    - 瀏覽器會自動打開 `localhost:9527`。
 
-2. **設定**
+3. **設定**
    - 在 **CONFIG** 頁填寫 IBKR 賬戶資料。
    - 如果你沒有設定 Telegram，則需要在 **BOT CONSOLE** 手動貼上訊號。
 
-3. **BOT CONSOLE**
+4. **BOT CONSOLE**
    - 當 Telegram 沒有訊號時，你可以手動輸入未觸發的訊號。
    - 機械人會顯示指示和範例。
 
-4. **運作流程**
+5. **運作流程**
    - 機械人會在市場開市前預先準備所有訂單，並檢查是否有重複（包括 TWS 已存在訂單和本次會話訂單）。
    - 開市時，機械人會獲取 SPX 官方開市價。
    - 如果 SPX 開市價 **小於或等於觸發價**，預設訂單會自動傳送；否則會取消。
-   - 9:32 AM 時，機械人會再次檢查 Telegram 或手動輸入的新訊號，並補充任何有效新訂單。
+   - 9:32 AM 時，機械人會檢查 Telegram 新訊號並補充任何有效新訂單。
+   - **如果你沒有使用 Telegram，並在 9:31 之後收到新訊號，請停止並重新啟動機械人，然後手動輸入新訊號。**
    - 開市後，機械人會持續監控錯誤訂單和失敗訊號：
      - **錯誤訂單**（如撞腳、被拒絕等）會在市場條件符合時自動重試。
      - **失敗訊號**（如找不到合約 ID 或沒有行使價）會自動重試，並包含行使價調整邏輯（LC -5、SC +5）。
      - 所有重試都會再次檢查是否有重複訂單，避免重複下單。
    - 機械人每秒循環一次，確保只要條件達成就會即時下單，直到收市為止。
-   - 如果你未使用 Telegram 並在 9:31 後發現新訊號，請停止並重新啟動機械人，然後輸入新訊號。
 
 ## macOS Security Warning
 
