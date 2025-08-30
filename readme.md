@@ -35,7 +35,7 @@
      - **Failed signals** (e.g., missing contract IDs or no strike price) are retried, including logic to adjust strikes (+5/-5) if needed.  
        **Note:** Adjusting strikes (+5/-5) will not affect the trigger price; the trigger price always uses the original LC/SC strikes from the signal.
      - All retries include duplicate checks to prevent submitting the same order twice.
-   - The bot loops every second, ensuring orders are submitted as soon as conditions are met, until market close.
+     - The bot loops every second, ensuring orders are submitted as soon as conditions are met, until market close.
 
 ---
 
@@ -74,7 +74,7 @@
      - **失敗訊號**（如找不到合約 ID 或沒有行使價）會自動重試，並包含行使價調整邏輯（LC -5、SC +5）。  
        **注意：** 行使價調整（LC -5、SC +5）不會影響觸發價，觸發價始終以原始訊號的 LC/SC 行使價計算。
      - 所有重試都會再次檢查是否有重複訂單，避免重複下單。
-   - 機械人每秒循環一次，確保只要條件達成就會即時下單，直到收市為止。
+     - 機械人每秒循環一次，確保只要條件達成就會即時下單，直到收市為止。
 
 ## macOS Security Warning
 
