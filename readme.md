@@ -34,7 +34,7 @@
      - **Error orders** (e.g., conflicting strikes or rejected orders) are automatically retried when market conditions are met.
      - **Failed signals** (e.g., missing contract IDs, no strike price, or other issues) are retried, including logic to adjust strikes (+5/-5) if needed.
        **Note:** Adjusting strikes (+5/-5) will not affect the trigger price; the trigger price always uses the original LC/SC strikes from the signal.
-     **Note:** Retries for both error orders and failed signals are triggered when the SPX price reaches or exceeds the LC strike.
+     - Retries for both error orders and failed signals are triggered when the SPX price reaches or exceeds the LC strike.
      - All retries include duplicate checks to prevent submitting the same order twice.
      - The bot loops every second, ensuring orders are submitted as soon as conditions are met, until market close.
 
@@ -74,7 +74,7 @@
      - **錯誤訂單**（如撞腳、被拒絕等）會在市場條件符合時自動重試。
      - **失敗訊號**（如找不到合約 ID 或沒有行使價）會自動重試，並包含行使價調整邏輯（LC -5、SC +5）。
        **注意：** 行使價調整（LC -5、SC +5）不會影響觸發價，觸發價始終以原始訊號的 LC/SC 行使價計算。
-     **注意：** 當 SPX 價格達到或超過 LC 行使價時，會觸發重試。
+     - 錯誤訂單和失敗訊號的重試，都是在 SPX 價格達到或超過 LC 行使價時觸發。
      - 所有重試都會再次檢查是否有重複訂單，避免重複下單。
      - 機械人每秒循環一次，確保只要條件達成就會即時下單，直到收市為止。
 
