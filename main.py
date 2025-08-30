@@ -12,10 +12,9 @@ import argparse # 1. Import argparse
 import json
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
-from config import WAIT_AFTER_OPEN_SECONDS
 
 from config import (IBKR_HOST, IBKR_PORT, IBKR_CLIENT_ID, 
-                    UNDERLYING_SYMBOL, IBKR_ACCOUNT, SNAPMID_OFFSET)
+                    UNDERLYING_SYMBOL, IBKR_ACCOUNT, SNAPMID_OFFSET, WAIT_AFTER_OPEN_SECONDS)
 from signal_utils import (Signal, gather_signals, get_signal_hash)
 from ibkr_app import IBKRApp
 
@@ -32,6 +31,8 @@ class ManagedOrder:
     contract: Contract
     order_obj: Order
     hash: str
+
+failed_conid_signals = []  # <-- Add here, after imports
 
 def get_trading_day_open(tz, choice='today'):
     """
@@ -51,15 +52,21 @@ def get_trading_day_open(tz, choice='today'):
         
     return target_day.replace(hour=9, minute=30, second=0, microsecond=0)
 
-def is_duplicate(signal_leg_conIds, signal_trigger, existing_orders):
+def is_duplicate_order(leg_ids, trigger_price, existing_orders, managed_orders):
     """
-    Checks if a signal matches any existing open order by comparing leg conIds and trigger price.
+    Checks if an order with the given leg_ids and trigger_price exists in existing_orders or managed_orders.
     """
+    # Check existing TWS orders
     for order in existing_orders:
         if (order.get("secType") == "BAG" and
-            order.get("trigger_price") == signal_trigger and
-            order.get("leg_conIds") == signal_leg_conIds):
-            return True # Found a perfect match
+            tuple(order.get("leg_conIds", [])) == tuple(leg_ids) and
+            order.get("trigger_price") == trigger_price):
+            return True
+    # Check managed orders in current session
+    for mo in managed_orders:
+        mo_leg_ids = sorted([leg.conId for leg in mo.contract.comboLegs])
+        if tuple(mo_leg_ids) == tuple(leg_ids) and mo.trigger == trigger_price:
+            return True
     return False
 
 def connect_with_retry(app, host, port, client_id, attempts=3):
@@ -160,6 +167,7 @@ def start_spx_stream(app: IBKRApp, req_id_start: int = 100, tries: int = 3) -> N
         print(f"SPX live price not yet available (attempt {i+1}/{tries}). Retrying stream request...", flush=True)
 
 def get_option_conid_with_retry(app: IBKRApp, expiry: str, strike: float, right: str, attempts: int = 3) -> int:
+    print(f"Fetching option conId for {expiry} {strike}{right}...", flush=True)
     last_err: Optional[Exception] = None
     for i in range(1, attempts + 1):
         try:
@@ -236,16 +244,6 @@ def process_and_stage_new_signals(app: IBKRApp, signals: List[Signal], managed_o
     if not signals:
         return
 
-    # Create a set of identifiers from all orders we know about for efficient duplicate checking
-    # An identifier is a tuple of (sorted_leg_conids, trigger_price)
-    known_order_identifiers = set()
-    for order in existing_orders:
-        if order.get("secType") == "BAG" and order.get("leg_conIds") and order.get("trigger_price"):
-            known_order_identifiers.add((tuple(order["leg_conIds"]), order["trigger_price"]))
-    for mo in managed_orders:
-        leg_ids = sorted([leg.conId for leg in mo.contract.comboLegs])
-        known_order_identifiers.add((tuple(leg_ids), mo.trigger))
-
     for s in signals:
         print(f"Processing signal: {json.dumps(s.__dict__)}", flush=True)
         try:
@@ -253,8 +251,7 @@ def process_and_stage_new_signals(app: IBKRApp, signals: List[Signal], managed_o
             sc_conid = get_option_conid_with_retry(app, s.expiry, s.sc_strike, "C", attempts=3)
             
             leg_ids = sorted([lc_conid, sc_conid])
-            # Check for duplicates against all known orders
-            if (tuple(leg_ids), s.trigger_price) in known_order_identifiers:
+            if is_duplicate_order(leg_ids, s.trigger_price, existing_orders, managed_orders):
                 print(f"--> Duplicate order detected for {s.lc_strike}/{s.sc_strike} @ {s.trigger_price}. Skipping.", flush=True)
                 continue
 
@@ -266,15 +263,17 @@ def process_and_stage_new_signals(app: IBKRApp, signals: List[Signal], managed_o
             # Stage the order and add it to our managed list
             mo = stage_order(app, s, contract, order, sig_hash)
             managed_orders.append(mo)
-            
-            # Also add its identifier to our set to prevent duplicates in the same batch
-            known_order_identifiers.add((tuple(leg_ids), s.trigger_price))
 
         except Exception as e:
-            print(f"Could not process or stage signal {s}. Skipping. Error: {e}", flush=True)
+            print(f"Could not process or stage signal {s}. Adding to failed conId signals to retry later. Error: {e}", flush=True)
+            signal_key = (s.expiry, s.lc_strike, s.sc_strike, s.trigger_price)
+            if signal_key not in { (fs.expiry, fs.lc_strike, fs.sc_strike, fs.trigger_price) for fs, _ in failed_conid_signals }:
+                failed_conid_signals.append((s, s.expiry))
+            else:
+                print(f"Signal {s} already in failed conId list. Skipping duplicate addition.", flush=True)
             continue
 
-def fetch_open_price_with_retry(app: IBKRApp, symbol: str, attempts: int = 5, wait_secs: int = 10) -> Optional[float]:
+def fetch_open_price_with_retry(app: IBKRApp, symbol: str, attempts: int = 5, wait_secs: int = 3) -> Optional[float]:
     underlying_contract = Contract(); underlying_contract.symbol = symbol; underlying_contract.secType = "IND"; underlying_contract.currency = "USD"; underlying_contract.exchange = "CBOE"
     for i in range(1, attempts + 1):
         app.underlying_open_price = None
@@ -286,35 +285,96 @@ def fetch_open_price_with_retry(app: IBKRApp, symbol: str, attempts: int = 5, wa
             return app.underlying_open_price
     return None
 
-def run_error_retry_loop(app: IBKRApp, managed_orders: List[ManagedOrder], market_close_time: datetime, tz) -> None:
-    while app.error_order_ids:
-        now = datetime.now(tz)
-        if now >= market_close_time:
-            print("Market close reached. Stopping error retry loop.", flush=True)
-            break
-        print(f"Critical error(s) detected for order IDs: {app.error_order_ids}. Retrying after 1 minute.", flush=True)
-        time.sleep(60)
-        for error_id in list(app.error_order_ids):
-            matches = [m for m in managed_orders if m.id == error_id]
-            if not matches:
-                print(f"Order ID {error_id} seems resolved. Removing from error list.", flush=True)
-                app.error_order_ids.remove(error_id)
-                continue
-            mo = matches[0]
-            live_price = app.current_spx_price
-            if live_price is None:
-                print("Live SPX price not available yet. Waiting...", flush=True)
-                continue
-            print(f"Checking retry condition for order {error_id}: Live={live_price}, LC={mo.lc_strike}", flush=True)
-            if live_price >= mo.lc_strike:
-                print(f"Condition met. Retrying order {error_id}...", flush=True)
-                new_id = app.nextOrderId
-                app.nextOrderId += 1
-                mo.order_obj.transmit = True
-                app.placeOrder(new_id, mo.contract, mo.order_obj)
-                mo.id = new_id
-            else:
-                print(f"Condition not met for order {error_id}. Will re-check in the next cycle.", flush=True)
+def run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger_conid, market_close_time, tz, existing_orders):
+    while datetime.now(tz) < market_close_time and (app.error_order_ids or failed_conid_signals):
+        live_price = app.current_spx_price
+
+        # Gather all LC strikes from error orders and failed conid signals
+        error_lc_strikes = [mo.lc_strike for mo in managed_orders if mo.id in app.error_order_ids]
+        failed_lc_strikes = [signal.lc_strike for signal, _ in failed_conid_signals]
+        all_lc_strikes = error_lc_strikes + failed_lc_strikes
+
+        if not all_lc_strikes or live_price is None:
+            # Nothing actionable or no price yet
+            now = time.time()
+            if now - last_status_print > 30:
+                print("Waiting for SPX live price or actionable signals...", flush=True)
+                last_status_print = now
+            time.sleep(1)
+            continue
+
+        lowest_lc_strike = min(all_lc_strikes)
+
+        if live_price >= lowest_lc_strike:
+            # Live price is above the lowest LC strike, we can act on it
+            print(f"Live price {live_price} is above lowest LC strike {lowest_lc_strike}.", flush=True)
+            # --- Error order retry ---
+            if app.error_order_ids:
+                print(f"Critical error(s) detected for order IDs: {app.error_order_ids}. Retrying...", flush=True)
+                for error_id in list(app.error_order_ids):
+                    matches = [m for m in managed_orders if m.id == error_id]
+                    if not matches:
+                        print(f"Order ID {error_id} seems resolved. Removing from error list.", flush=True)
+                        app.error_order_ids.remove(error_id)
+                        continue
+                    mo = matches[0]
+                    live_price = app.current_spx_price
+                    if live_price is None:
+                        print("Live SPX price not available yet. Waiting...", flush=True)
+                        continue
+                    print(f"Checking retry condition for order {error_id}: Live={live_price}, LC={mo.lc_strike}", flush=True)
+                    if live_price >= mo.lc_strike:
+                        print(f"Condition met. Retrying order {error_id}...", flush=True)
+                        new_id = app.nextOrderId
+                        app.nextOrderId += 1
+                        mo.order_obj.transmit = True
+                        app.placeOrder(new_id, mo.contract, mo.order_obj)
+                        mo.id = new_id
+                    else:
+                        print(f"Condition not met for order {error_id}. Will re-check in the next cycle.", flush=True)
+
+            # --- Failed conId retry ---
+            if failed_conid_signals:
+                print(f"Retrying failed conId signals: {len(failed_conid_signals)} remaining.", flush=True)
+                for idx, (signal, expiry) in enumerate(list(failed_conid_signals)):
+                    live_price = app.current_spx_price
+                    if live_price is None:
+                        print("Live SPX price not available yet. Waiting...", flush=True)
+                        continue
+                    print(f"Checking retry for signal {signal}: Live={live_price}, LC={signal.lc_strike}", flush=True)
+                    if live_price >= signal.lc_strike:
+                        try:
+                            try:
+                                lc_conid = get_option_conid_with_retry(app, expiry, signal.lc_strike, "C", attempts=3)
+                            except Exception as e:
+                                print(f"LC conId fetch failed for {signal.lc_strike}. Trying LC strike -5...", flush=True)
+                                lc_conid = get_option_conid_with_retry(app, expiry, signal.lc_strike - 5, "C", attempts=3)
+                            try:
+                                sc_conid = get_option_conid_with_retry(app, expiry, signal.sc_strike, "C", attempts=3)
+                            except Exception as e:
+                                print(f"SC conId fetch failed for {signal.sc_strike}. Trying SC strike +5...", flush=True)
+                                sc_conid = get_option_conid_with_retry(app, expiry, signal.sc_strike + 5, "C", attempts=3)
+
+                            leg_ids = sorted([lc_conid, sc_conid])
+                            # Check for duplicates before placing order
+                            if is_duplicate_order(leg_ids, signal.trigger_price, existing_orders, managed_orders):
+                                print(f"--> Duplicate order detected for {signal.lc_strike}/{signal.sc_strike} @ {signal.trigger_price}. Skipping.", flush=True)
+                                failed_conid_signals.pop(idx)
+                                continue
+                            contract = build_combo_contract(lc_conid, sc_conid)
+                            order = build_staged_order(signal, trigger_conid)
+                            order.transmit = True  # <-- Make order live immediately
+                            order_id = app.nextOrderId
+                            app.nextOrderId += 1
+                            app.placeOrder(order_id, contract, order)
+                            print(f"Successfully submitted LIVE order for signal {signal} after retry.", flush=True)
+                            failed_conid_signals.pop(idx)
+                        except Exception as e:
+                            print(f"Retry failed for signal {signal}: {e}", flush=True)
+                    else:
+                        print(f"Condition not met for signal {signal}. Will re-check in the next cycle.", flush=True)
+        time.sleep(1)
+    print("Post-open retry loops concluded (either market close reached or no pending issues).", flush=True)
 
 def main_loop():
     parser = argparse.ArgumentParser(description="Automated SPX Bull Spread Order Management for IBKR.")
@@ -366,6 +426,7 @@ def main_loop():
                 print("Fatal Error: could not fetch SPX conId. Exiting.")
                 app.disconnect(); return
 
+            # Sleep to wait for any async data to settle
             time.sleep(5)
             print("--------------------------", flush=True)
             print("Looking for new signals...", flush=True)
@@ -385,7 +446,7 @@ def main_loop():
             print(f"Waiting {WAIT_AFTER_OPEN_SECONDS} second(s) after market open for IBKR to publish the official open price...", flush=True)
             time.sleep(int(WAIT_AFTER_OPEN_SECONDS))
 
-            open_px = fetch_open_price_with_retry(app, UNDERLYING_SYMBOL, attempts=5, wait_secs=10)
+            open_px = fetch_open_price_with_retry(app, UNDERLYING_SYMBOL, attempts=5, wait_secs=3)
             if open_px is None:
                 print(f"Could not get {UNDERLYING_SYMBOL} open price after retries. Please manually transmit orders.", flush=True)
                 app.disconnect(); return
@@ -415,7 +476,7 @@ def main_loop():
             print("--- Post-open signal checks complete. Monitoring for errors. ---", flush=True)
 
             # Post-place error retry loop
-            run_error_retry_loop(app, managed_orders, app.market_close_time, app.tz)
+            run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger_conid, app.market_close_time, app.tz, existing_orders)
 
             # If the script completes normally, we can break the loop.
             print("Script has completed its automated tasks.", flush=True)
@@ -426,10 +487,10 @@ def main_loop():
             print("Market close reached. Sleeping until next trading day...", flush=True)
             app.disconnect()  # <-- Disconnect from IBKR after market close
             now = datetime.now(app.tz)
-            # Calculate next midnight (00:00) US/Eastern
-            next_midnight = (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-            sleep_seconds = (next_midnight - now).total_seconds()
-            print(f"Sleeping for {int(sleep_seconds)} seconds until {next_midnight.strftime('%Y-%m-%d %H:%M:%S %Z')}", flush=True)
+            # Calculate next 5AM US/Eastern
+            next_5am = (now + timedelta(days=1)).replace(hour=5, minute=0, second=0, microsecond=0)
+            sleep_seconds = (next_5am - now).total_seconds()
+            print(f"Sleeping for {int(sleep_seconds)} seconds until {next_5am.strftime('%Y-%m-%d %H:%M:%S %Z')}", flush=True)
             time.sleep(max(1, sleep_seconds))
             print("Waking up for new trading day.", flush=True)
             # The loop will restart and run the next day's logic

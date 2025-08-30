@@ -9,3 +9,5 @@ rsa
 pyasn1
 flask-socketio
 requests
+pandas
+pandas_market_calendars

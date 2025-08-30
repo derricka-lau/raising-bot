@@ -24,9 +24,15 @@
    - The bot will show instructions and examples.
 
 5. **How It Works**
-   - The bot waits for market open with staged orders.
-   - If SPX open price <= trigger price, it transmits staged orders. It then checks Telegram signals again at 9:32.
-   - Any conflicting orders will be retried automatically until market close.
+   - The bot stages all orders before market open, checking for duplicates against existing TWS orders and current session orders.
+   - At market open, it fetches the official SPX open price.
+   - If the SPX open price is **less than or equal to the trigger price**, staged orders are transmitted; otherwise, they are cancelled.
+   - At 9:32 AM, the bot checks for new signals (from Telegram or manual entry) and stages any additional valid orders.
+   - After open, the bot continuously monitors for errors and failed signals:
+     - **Error orders** (e.g., conflicting strikes or rejected orders) are automatically retried when market conditions are met.
+     - **Failed signals** (e.g., missing contract IDs or strikes too far OTM) are retried, including logic to adjust strikes (+5/-5) if needed.
+     - All retries include duplicate checks to prevent submitting the same order twice.
+   - The bot loops every second, ensuring orders are submitted as soon as conditions are met, until market close.
    - If you are not using Telegram and find a new signal after 9:31, please stop and rerun the bot, then enter the new signal.
 
 ---
@@ -54,9 +60,15 @@
    - 機械人會顯示指示和範例。
 
 4. **運作流程**
-   - 機械人會在市場開市前等待並準備預設訂單。
-   - 若 SPX 開市價<=觸發價，會傳送預設訂單，然後在 9:32 再檢查 Telegram 訊號。
-   - 有撞腳的訂單會自動重試直到收市。
+   - 機械人會在市場開市前預先準備所有訂單，並檢查是否有重複（包括 TWS 已存在訂單和本次會話訂單）。
+   - 開市時，機械人會獲取 SPX 官方開市價。
+   - 如果 SPX 開市價 **小於或等於觸發價**，預設訂單會自動傳送；否則會取消。
+   - 9:32 AM 時，機械人會再次檢查 Telegram 或手動輸入的新訊號，並補充任何有效新訂單。
+   - 開市後，機械人會持續監控錯誤訂單和失敗訊號：
+     - **錯誤訂單**（如撞腳、被拒絕等）會在市場條件符合時自動重試。
+     - **失敗訊號**（如找不到合約 ID 或沒有行使價）會自動重試，並包含行使價調整邏輯（LC -5、SC +5）。
+     - 所有重試都會再次檢查是否有重複訂單，避免重複下單。
+   - 機械人每秒循環一次，確保只要條件達成就會即時下單，直到收市為止。
    - 如果你未使用 Telegram 並在 9:31 後發現新訊號，請停止並重新啟動機械人，然後輸入新訊號。
 
 ## macOS Security Warning

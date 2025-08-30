@@ -66,6 +66,17 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ config, onFieldChange, onSave, 
                   fullWidth
                 />
               )
+            ) : key === "WAIT_AFTER_OPEN_SECONDS" ? (
+              <TextField
+                label="Wait After Open (seconds)"
+                name="WAIT_AFTER_OPEN_SECONDS"
+                type="number"
+                value={config.WAIT_AFTER_OPEN_SECONDS ?? 3}
+                onChange={(e) => onFieldChange("WAIT_AFTER_OPEN_SECONDS", e.target.value)}
+                InputProps={{ inputProps: { min: 1, max: 61 } }}
+                helperText="Seconds to wait after market open before fetching SPX open price."
+                fullWidth
+              />
             ) : (
               <TextField
                 key={key}
@@ -107,16 +118,6 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ config, onFieldChange, onSave, 
               helperText="Required for LMT orders"
             />
           )}
-          <TextField
-            label="Wait After Open (seconds)"
-            name="WAIT_AFTER_OPEN_SECONDS"
-            type="number"
-            value={config.WAIT_AFTER_OPEN_SECONDS ?? 3}
-            onChange={(e) => onFieldChange("WAIT_AFTER_OPEN_SECONDS", e.target.value)}
-            InputProps={{ inputProps: { min: 1, max: 30 } }}
-            helperText="Seconds to wait after market open before fetching SPX open price."
-            fullWidth
-          />
           <Box>
             <Button
               variant="contained"

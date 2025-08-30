@@ -5,14 +5,17 @@ import hashlib
 import re
 import os
 import requests
+import pandas_market_calendars as mcal
+import pandas as pd
 from telethon import TelegramClient
 from telethon.errors import SessionPasswordNeededError
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import List
 from config import (TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_CHANNEL, get_user_data_dir,
                     DEFAULT_ORDER_TYPE, DEFAULT_LIMIT_PRICE, DEFAULT_STOP_PRICE, MULTI_SIGNAL_REGEX, SNAPMID_OFFSET)
 from dataclasses import dataclass
 from typing import Optional
+from pytz import timezone
 
 @dataclass
 class Signal:
@@ -193,8 +196,9 @@ def gather_signals(allow_manual_fallback: bool = True) -> List[Signal]:
     return signals
 
 def to_signal(d: dict) -> Signal:
+    expiry = get_valid_trading_day(str(d["expiry"]))
     return Signal(
-        expiry=str(d["expiry"]),
+        expiry=expiry,
         lc_strike=float(d["lc_strike"]),
         sc_strike=float(d["sc_strike"]),
         trigger_price=float(d["trigger_price"]),
@@ -203,4 +207,19 @@ def to_signal(d: dict) -> Signal:
         stop_price=(None if d.get("stop_price") in (None, "", "None") else float(d["stop_price"])),
         snapmid_offset=(None if d.get("snapmid_offset") in (None, "", "None") else float(d.get("snapmid_offset", SNAPMID_OFFSET))),
     )
+
+def get_valid_trading_day(date_str):
+    """
+    Returns date_str (YYYYMMDD) if it's a valid US trading day, otherwise returns previous valid trading day.
+    """
+    nyse = mcal.get_calendar('NYSE')
+    date = datetime.strptime(date_str, "%Y%m%d")
+    schedule = nyse.valid_days(start_date="2000-01-01", end_date=date.strftime("%Y-%m-%d"))
+    if len(schedule) == 0:
+        raise ValueError("No valid trading days found before given date.")
+    if pd.Timestamp(date) in schedule:
+        return date_str
+    else:
+        prev_trading_day = schedule[-1]
+        return prev_trading_day.strftime("%Y%m%d")
 
