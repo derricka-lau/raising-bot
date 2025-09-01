@@ -192,6 +192,7 @@ const BotConsole: React.FC<BotConsoleProps> = ({
           <>
             {dedupedOutput.map((line, i) => {
               const cleanLine = stripTimestamp(line);
+
               // Detect and format signal lines
               if (cleanLine.startsWith("Processing signal: ")) {
                 try {
@@ -208,10 +209,53 @@ const BotConsole: React.FC<BotConsoleProps> = ({
                     </Box>
                   );
                 } catch {
-                  // fallback to raw line
                   return <Box key={i} sx={bubbleStyle}>{cleanLine}</Box>;
                 }
               }
+
+              // Detect and format STATUS_UPDATE lines
+              if (cleanLine.startsWith("STATUS_UPDATE::")) {
+                try {
+                  const jsonStr = cleanLine.replace("STATUS_UPDATE::", "");
+                  const status = JSON.parse(jsonStr);
+                  return (
+                    <Box key={i} sx={bubbleStyle}>
+                      <strong>Status Update:</strong>
+                      <div>
+                        <u>Error Orders</u>:
+                        {status.error_orders.length === 0 ? (
+                          <span> None</span>
+                        ) : (
+                          <ul style={{ margin: 0, paddingLeft: 16 }}>
+                            {status.error_orders.map((order, idx) => (
+                              <li key={idx}>
+                                Order ID: {order.orderId}, Symbol: {order.symbol}, Type: {order.order_type}, Trigger: {order.trigger_price}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                      <div>
+                        <u>Failed Signals (conId)</u>:
+                        {status.failed_conid_signals.length === 0 ? (
+                          <span> None</span>
+                        ) : (
+                          <ul style={{ margin: 0, paddingLeft: 16 }}>
+                            {status.failed_conid_signals.map((sig, idx) => (
+                              <li key={idx}>
+                                Expiry: {sig.expiry}, LC: {sig.lc_strike}, SC: {sig.sc_strike}, Trigger: {sig.trigger_price}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
+                    </Box>
+                  );
+                } catch {
+                  return <Box key={i} sx={bubbleStyle}>{cleanLine}</Box>;
+                }
+              }
+
               // Default: regular line
               return <Box key={i} sx={bubbleStyle}>{cleanLine}</Box>;
             })}

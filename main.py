@@ -269,6 +269,9 @@ def process_and_stage_new_signals(app: IBKRApp, signals: List[Signal], managed_o
             signal_key = (s.expiry, s.lc_strike, s.sc_strike, s.trigger_price)
             if signal_key not in { (fs.expiry, fs.lc_strike, fs.sc_strike, fs.trigger_price) for fs, _ in failed_conid_signals }:
                 failed_conid_signals.append((s, s.expiry))
+                error_orders = [order for order in app.open_orders if order["orderId"] in app.error_order_ids]
+                status_data = { "error_orders": error_orders, "failed_conid_signals": [{"expiry": s.expiry, "lc_strike": s.lc_strike, "sc_strike": s.sc_strike, "trigger_price": s.trigger_price} for s, _ in failed_conid_signals] }
+                print(f"STATUS_UPDATE::{json.dumps(status_data)}", flush=True)
             else:
                 print(f"Signal {s} already in failed conId list. Skipping duplicate addition.", flush=True)
             continue
@@ -360,6 +363,9 @@ def run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger
                             if is_duplicate_order(leg_ids, signal.trigger_price, existing_orders, managed_orders):
                                 print(f"--> Duplicate order detected for {signal.lc_strike}/{signal.sc_strike} @ {signal.trigger_price}. Skipping.", flush=True)
                                 failed_conid_signals.pop(idx)
+                                error_orders = [order for order in app.open_orders if order["orderId"] in app.error_order_ids]
+                                status_data = { "error_orders": error_orders, "failed_conid_signals": [{"expiry": s.expiry, "lc_strike": s.lc_strike, "sc_strike": s.sc_strike, "trigger_price": s.trigger_price} for s, _ in failed_conid_signals] }
+                                print(f"STATUS_UPDATE::{json.dumps(status_data)}", flush=True)
                                 continue
                             contract = build_combo_contract(lc_conid, sc_conid)
                             order = build_staged_order(signal, trigger_conid)
@@ -369,6 +375,9 @@ def run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger
                             app.placeOrder(order_id, contract, order)
                             print(f"Successfully submitted LIVE order for signal {signal} after retry.", flush=True)
                             failed_conid_signals.pop(idx)
+                            error_orders = [order for order in app.open_orders if order["orderId"] in app.error_order_ids]
+                            status_data = { "error_orders": error_orders, "failed_conid_signals": [{"expiry": s.expiry, "lc_strike": s.lc_strike, "sc_strike": s.sc_strike, "trigger_price": s.trigger_price} for s, _ in failed_conid_signals] }
+                            print(f"STATUS_UPDATE::{json.dumps(status_data)}", flush=True)
                         except Exception as e:
                             print(f"Retry failed for signal {signal}: {e}", flush=True)
                     else:
