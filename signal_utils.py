@@ -16,6 +16,7 @@ from config import (TELEGRAM_API_ID, TELEGRAM_API_HASH, TELEGRAM_CHANNEL, get_us
 from dataclasses import dataclass
 from typing import Optional
 from pytz import timezone
+from collections import Counter
 
 @dataclass
 class Signal:
@@ -27,6 +28,7 @@ class Signal:
     lmt_price: Optional[float] = None
     stop_price: Optional[float] = None
     snapmid_offset: Optional[float] = None
+    allowed_duplicates: int = 1  # <-- Add this field
 
 # --- Hash and Record-Keeping Functions (Unchanged) ---
 def get_signal_hash(text): return hashlib.sha256(text.encode()).hexdigest()
@@ -193,6 +195,19 @@ def gather_signals(allow_manual_fallback: bool = True) -> List[Signal]:
                 signals.append(to_signal(d))
             except Exception as e:
                 print(f"Skipping malformed manual signal {d}: {e}")
+    
+    # Use a tuple as the key for each signal
+    signal_keys = [
+        (s.expiry, s.lc_strike, s.sc_strike, s.trigger_price)
+        for s in signals
+    ]
+    counts = Counter(signal_keys)
+
+    # Set allowed_duplicates for each signal
+    for s in signals:
+        key = (s.expiry, s.lc_strike, s.sc_strike, s.trigger_price)
+        s.allowed_duplicates = counts[key]
+
     return signals
 
 def to_signal(d: dict) -> Signal:
@@ -206,6 +221,7 @@ def to_signal(d: dict) -> Signal:
         lmt_price=(None if d.get("lmt_price") in (None, "", "None") else float(d["lmt_price"])),
         stop_price=(None if d.get("stop_price") in (None, "", "None") else float(d["stop_price"])),
         snapmid_offset=(None if d.get("snapmid_offset") in (None, "", "None") else float(d.get("snapmid_offset", SNAPMID_OFFSET))),
+        allowed_duplicates=int(d.get("allowed_duplicates", 1))  # <-- Set from dict, default 1
     )
 
 def get_valid_trading_day(date_str):

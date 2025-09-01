@@ -52,22 +52,25 @@ def get_trading_day_open(tz, choice='today'):
         
     return target_day.replace(hour=9, minute=30, second=0, microsecond=0)
 
-def is_duplicate_order(leg_ids, trigger_price, existing_orders, managed_orders):
+def is_duplicate_order(leg_ids, trigger_price, existing_orders, managed_orders, signal):
     """
-    Checks if an order with the given leg_ids and trigger_price exists in existing_orders or managed_orders.
+    Checks if the number of matching orders in existing_orders + managed_orders
+    meets or exceeds signal.allowed_duplicates.
     """
+    count = 0
     # Check existing TWS orders
     for order in existing_orders:
         if (order.get("secType") == "BAG" and
             tuple(order.get("leg_conIds", [])) == tuple(leg_ids) and
             order.get("trigger_price") == trigger_price):
-            return True
+            count += 1
     # Check managed orders in current session
     for mo in managed_orders:
         mo_leg_ids = sorted([leg.conId for leg in mo.contract.comboLegs])
         if tuple(mo_leg_ids) == tuple(leg_ids) and mo.trigger == trigger_price:
-            return True
-    return False
+            count += 1
+    # Compare to allowed_duplicates
+    return count >= signal.allowed_duplicates
 
 def connect_with_retry(app, host, port, client_id, attempts=3):
     for i in range(1, attempts + 1):
@@ -237,10 +240,6 @@ def stage_order(app: IBKRApp, signal: Signal, contract: Contract, order: Order, 
     )
 
 def process_and_stage_new_signals(app: IBKRApp, signals: List[Signal], managed_orders: List[ManagedOrder], existing_orders: List[dict], trigger_conid: int):
-    """
-    Processes a new batch of signals, checks for duplicates against all known orders (API + current session),
-    and stages valid new orders. Appends new ManagedOrder objects to the managed_orders list.
-    """
     if not signals:
         return
 
@@ -251,7 +250,7 @@ def process_and_stage_new_signals(app: IBKRApp, signals: List[Signal], managed_o
             sc_conid = get_option_conid_with_retry(app, s.expiry, s.sc_strike, "C", attempts=3)
             
             leg_ids = sorted([lc_conid, sc_conid])
-            if is_duplicate_order(leg_ids, s.trigger_price, existing_orders, managed_orders):
+            if is_duplicate_order(leg_ids, s.trigger_price, existing_orders, managed_orders, s):
                 print(f"--> Duplicate order detected for {s.lc_strike}/{s.sc_strike} @ {s.trigger_price}. Skipping.", flush=True)
                 continue
 
@@ -266,14 +265,19 @@ def process_and_stage_new_signals(app: IBKRApp, signals: List[Signal], managed_o
 
         except Exception as e:
             print(f"Could not process or stage signal {s}. Adding to failed conId signals to retry later. Error: {e}", flush=True)
-            signal_key = (s.expiry, s.lc_strike, s.sc_strike, s.trigger_price)
-            if signal_key not in { (fs.expiry, fs.lc_strike, fs.sc_strike, fs.trigger_price) for fs, _ in failed_conid_signals }:
-                failed_conid_signals.append((s, s.expiry))
-                error_orders = [order for order in app.open_orders if order["orderId"] in app.error_order_ids]
-                status_data = { "error_orders": error_orders, "failed_conid_signals": [{"expiry": s.expiry, "lc_strike": s.lc_strike, "sc_strike": s.sc_strike, "trigger_price": s.trigger_price} for s, _ in failed_conid_signals] }
-                print(f"STATUS_UPDATE::{json.dumps(status_data)}", flush=True)
+            # --- Only append if not exceeding allowed_duplicates ---
+            key = (s.expiry, s.lc_strike, s.sc_strike, s.trigger_price)
+            current_failed = sum(
+                1 for fs in failed_conid_signals
+                if (fs.expiry, fs.lc_strike, fs.sc_strike, fs.trigger_price) == key
+            )
+            if current_failed < s.allowed_duplicates:
+                failed_conid_signals.append(s)
             else:
-                print(f"Signal {s} already in failed conId list. Skipping duplicate addition.", flush=True)
+                print(f"--> Not appending to failed_conid_signals: already reached allowed_duplicates for {key}", flush=True)
+            error_orders = [order for order in app.open_orders if order["orderId"] in app.error_order_ids]
+            status_data = { "error_orders": error_orders, "failed_conid_signals": [{"expiry": fs.expiry, "lc_strike": fs.lc_strike, "sc_strike": fs.sc_strike, "trigger_price": fs.trigger_price} for fs in failed_conid_signals] }
+            print(f"STATUS_UPDATE::{json.dumps(status_data)}", flush=True)
             continue
 
 def fetch_open_price_with_retry(app: IBKRApp, symbol: str, attempts: int = 5, wait_secs: int = 3) -> Optional[float]:
@@ -289,12 +293,13 @@ def fetch_open_price_with_retry(app: IBKRApp, symbol: str, attempts: int = 5, wa
     return None
 
 def run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger_conid, market_close_time, tz, existing_orders):
+    last_status_print = 0  # <-- Add this line!
     while datetime.now(tz) < market_close_time and (app.error_order_ids or failed_conid_signals):
         live_price = app.current_spx_price
 
         # Gather all LC strikes from error orders and failed conid signals
         error_lc_strikes = [mo.lc_strike for mo in managed_orders if mo.id in app.error_order_ids]
-        failed_lc_strikes = [signal.lc_strike for signal, _ in failed_conid_signals]
+        failed_lc_strikes = [signal.lc_strike for signal in failed_conid_signals]
         all_lc_strikes = error_lc_strikes + failed_lc_strikes
 
         if not all_lc_strikes or live_price is None:
@@ -339,7 +344,7 @@ def run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger
             # --- Failed conId retry ---
             if failed_conid_signals:
                 print(f"Retrying failed conId signals: {len(failed_conid_signals)} remaining.", flush=True)
-                for idx, (signal, expiry) in enumerate(list(failed_conid_signals)):
+                for idx, signal in enumerate(list(failed_conid_signals)):
                     live_price = app.current_spx_price
                     if live_price is None:
                         print("Live SPX price not available yet. Waiting...", flush=True)
@@ -348,23 +353,23 @@ def run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger
                     if live_price >= signal.lc_strike:
                         try:
                             try:
-                                lc_conid = get_option_conid_with_retry(app, expiry, signal.lc_strike, "C", attempts=3)
+                                lc_conid = get_option_conid_with_retry(app, signal.expiry, signal.lc_strike, "C", attempts=3)
                             except Exception as e:
                                 print(f"LC conId fetch failed for {signal.lc_strike}. Trying LC strike -5...", flush=True)
-                                lc_conid = get_option_conid_with_retry(app, expiry, signal.lc_strike - 5, "C", attempts=3)
+                                lc_conid = get_option_conid_with_retry(app, signal.expiry, signal.lc_strike - 5, "C", attempts=3)
                             try:
-                                sc_conid = get_option_conid_with_retry(app, expiry, signal.sc_strike, "C", attempts=3)
+                                sc_conid = get_option_conid_with_retry(app, signal.expiry, signal.sc_strike, "C", attempts=3)
                             except Exception as e:
                                 print(f"SC conId fetch failed for {signal.sc_strike}. Trying SC strike +5...", flush=True)
-                                sc_conid = get_option_conid_with_retry(app, expiry, signal.sc_strike + 5, "C", attempts=3)
+                                sc_conid = get_option_conid_with_retry(app, signal.expiry, signal.sc_strike + 5, "C", attempts=3)
 
                             leg_ids = sorted([lc_conid, sc_conid])
                             # Check for duplicates before placing order
-                            if is_duplicate_order(leg_ids, signal.trigger_price, existing_orders, managed_orders):
+                            if is_duplicate_order(leg_ids, signal.trigger_price, existing_orders, managed_orders, signal):
                                 print(f"--> Duplicate order detected for {signal.lc_strike}/{signal.sc_strike} @ {signal.trigger_price}. Skipping.", flush=True)
                                 failed_conid_signals.pop(idx)
                                 error_orders = [order for order in app.open_orders if order["orderId"] in app.error_order_ids]
-                                status_data = { "error_orders": error_orders, "failed_conid_signals": [{"expiry": s.expiry, "lc_strike": s.lc_strike, "sc_strike": s.sc_strike, "trigger_price": s.trigger_price} for s, _ in failed_conid_signals] }
+                                status_data = { "error_orders": error_orders, "failed_conid_signals": [{"expiry": s.expiry, "lc_strike": s.lc_strike, "sc_strike": s.sc_strike, "trigger_price": s.trigger_price} for s in failed_conid_signals] }
                                 print(f"STATUS_UPDATE::{json.dumps(status_data)}", flush=True)
                                 continue
                             contract = build_combo_contract(lc_conid, sc_conid)
@@ -376,7 +381,7 @@ def run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger
                             print(f"Successfully submitted LIVE order for signal {signal} after retry.", flush=True)
                             failed_conid_signals.pop(idx)
                             error_orders = [order for order in app.open_orders if order["orderId"] in app.error_order_ids]
-                            status_data = { "error_orders": error_orders, "failed_conid_signals": [{"expiry": s.expiry, "lc_strike": s.lc_strike, "sc_strike": s.sc_strike, "trigger_price": s.trigger_price} for s, _ in failed_conid_signals] }
+                            status_data = { "error_orders": error_orders, "failed_conid_signals": [{"expiry": s.expiry, "lc_strike": s.lc_strike, "sc_strike": s.sc_strike, "trigger_price": s.trigger_price} for s in failed_conid_signals] }
                             print(f"STATUS_UPDATE::{json.dumps(status_data)}", flush=True)
                         except Exception as e:
                             print(f"Retry failed for signal {signal}: {e}", flush=True)
@@ -451,7 +456,7 @@ def main_loop():
             time.sleep(2)  # Give some time for the app to settle
             asyncio.run(wait_until_market_open(market_open_time, app.tz))
 
-            # Wait WAIT_AFTER_OPEN_SECONDS second(s) after market open for IBKR to publish the open bar
+            # Wait 3 second(s) after market open for IBKR to publish the open bar
             print(f"Waiting {WAIT_AFTER_OPEN_SECONDS} second(s) after market open for IBKR to publish the official open price...", flush=True)
             time.sleep(int(WAIT_AFTER_OPEN_SECONDS))
 

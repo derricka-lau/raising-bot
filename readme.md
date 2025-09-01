@@ -2,6 +2,8 @@
 
 ## How to Use
 
+**EN:**
+
 1. **TWS (Trader Workstation)**
    - Download IBKR Trader Workstation (TWS) from [Interactive Brokers official site](https://www.interactivebrokers.com/en/index.php?f=16040).
    - Install and open TWS.
@@ -38,9 +40,7 @@
      - All retries include duplicate checks to prevent submitting the same order twice.
      - The bot loops every second, ensuring orders are submitted as soon as conditions are met, until market close.
 
----
-
-## 中文簡介
+**中文:**  
 
 1. **TWS（IBKR 交易工作站）**
    - 請先到 [IBKR 官方網站](https://www.interactivebrokers.com/en/index.php?f=16040) 下載並安裝 Trader Workstation (TWS)。
@@ -77,6 +77,25 @@
      - 錯誤訂單和失敗訊號的重試，都是在 SPX 價格達到或超過 LC 行使價時觸發。
      - 所有重試都會再次檢查是否有重複訂單，避免重複下單。
      - 機械人每秒循環一次，確保只要條件達成就會即時下單，直到收市為止。
+---
+
+## Signal Deduplication & Retry Logic / 訊號去重及重試邏輯
+
+**EN:**  
+- The bot automatically counts how many times each unique signal (same expiry, LC strike, SC strike, trigger price) appears in the input (API, Telegram, manual).
+- Each signal is assigned an `allowed_duplicates` value based on this count.
+- Before placing any order (including retries), the bot checks all existing and managed orders for duplicates and only allows up to the permitted number for each signal.
+- All error and failed signal retries also use this duplicate check, ensuring no order is ever placed more than the allowed limit.
+- This logic applies to initial staging, 9:32 signal checks, error order retries, and failed conid retries.
+
+**中文:**  
+- 機械人會自動統計每個唯一訊號（到期日、LC行使價、SC行使價、觸發價相同）在輸入（API、Telegram、手動）中出現的次數。
+- 每個訊號都會根據出現次數自動設定 `allowed_duplicates`（允許重複下單數）。
+- 每次下單（包括重試）前，機械人都會檢查所有已存在和已管理的訂單，確保每個訊號的下單次數不超過允許的數量。
+- 所有錯誤訂單和失敗訊號的重試也會用這個去重邏輯，確保不會超過允許的下單次數。
+- 此邏輯適用於初始下單、9:32訊號檢查、錯誤訂單重試和合約ID失敗重試。
+
+---
 
 ## macOS Security Warning
 
