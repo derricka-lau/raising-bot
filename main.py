@@ -491,6 +491,16 @@ def main_loop():
             process_managed_orders(app, managed_orders, UNDERLYING_SYMBOL)
             print("--- Post-open signal checks complete. Monitoring for errors. ---", flush=True)
 
+            # Display only successfully submitted orders
+            if managed_orders:
+                print("\n=== Successfully Submitted Orders ===")
+                for mo in managed_orders:
+                    if mo.id not in app.error_order_ids:
+                        print(f"Order ID: {mo.id} | Trigger: {mo.trigger} | LC Strike: {mo.lc_strike} | SC Strike: {mo.sc_strike} | Type: {mo.order_obj.orderType}")
+                print("========================\n")
+            else:
+                print("\nNo orders have been submitted.\n")
+
             # Post-place error retry loop
             run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger_conid, app.market_close_time, app.tz, existing_orders)
 
