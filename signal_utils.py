@@ -126,20 +126,29 @@ def round_strike(strike):
 def parse_multi_signal_message(text):
     signals = []
     for match in re.finditer(MULTI_SIGNAL_REGEX, text):
+        
         try:
             expiry = match.group(1).replace('-', '')
             sc_str = round_strike(match.group(2))
             lc_str = round_strike(match.group(3))
             trigger_midpoint = (float(sc_str) + float(lc_str)) / 2.0
-            signals.append({
-                "expiry": expiry,
-                "sc_strike": sc_str,
-                "lc_strike": lc_str,  # <-- fix here
-                "trigger_price": str(trigger_midpoint),
-                "order_type": DEFAULT_ORDER_TYPE,
-                "lmt_price": DEFAULT_LIMIT_PRICE,
-                "stop_price": DEFAULT_STOP_PRICE
-            })
+
+            # Find @N (Set number) in the line, default to 1 if not found
+            line = match.group(0)
+            set_matches = re.findall(r'@(\d+)', line)
+            set_numbers = [int(s) for s in set_matches] if set_matches else [1]
+
+            for set_num in set_numbers:
+                signals.append({
+                    "expiry": expiry,
+                    "sc_strike": sc_str,
+                    "lc_strike": lc_str,
+                    "trigger_price": str(trigger_midpoint),
+                    "order_type": DEFAULT_ORDER_TYPE,
+                    "lmt_price": DEFAULT_LIMIT_PRICE,
+                    "stop_price": DEFAULT_STOP_PRICE,
+                    "Set": set_num
+                })
         except (ValueError, IndexError):
             print(f"Warning: Skipping an invalid line in message: {match.group(0)}", flush=True)
             continue
