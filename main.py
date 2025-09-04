@@ -487,6 +487,8 @@ def main_loop():
             else:
                 print(f"Found {len(signals_932)} signal(s) at 9:32:00.", flush=True)
             process_and_stage_new_signals(app, signals_932, managed_orders, existing_orders, trigger_conid)
+            time.sleep(3)
+            process_managed_orders(app, managed_orders, UNDERLYING_SYMBOL)
             print("--- Post-open signal checks complete. Monitoring for errors. ---", flush=True)
 
             # Post-place error retry loop
