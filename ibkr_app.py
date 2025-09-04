@@ -33,6 +33,9 @@ class IBKRApp(EWrapper, EClient):
         self.market_close_time = None
         self.tz = None
 
+        self.conid_to_strike = {}   # <-- Add this line
+        self.conid_to_expiry = {}   # <-- Add this line
+
     def nextValidId(self, orderId: int):
         super().nextValidId(orderId)
         self.nextOrderId = orderId
@@ -114,7 +117,9 @@ class IBKRApp(EWrapper, EClient):
     def contractDetails(self, reqId, contractDetails):
         super().contractDetails(reqId, contractDetails)
         self.lastConId = contractDetails.contract.conId
-        self.contract_details_event.set() # Signal that contract details have arrived
+        self.conid_to_strike[self.lastConId] = contractDetails.contract.strike
+        self.conid_to_expiry[self.lastConId] = contractDetails.contract.lastTradeDateOrContractMonth
+        self.contract_details_event.set()
 
     def contractDetailsEnd(self, reqId: int):
         super().contractDetailsEnd(reqId)
@@ -157,3 +162,18 @@ class IBKRApp(EWrapper, EClient):
         reqid = self.nextReqId
         self.nextReqId += 1
         return reqid
+
+    def fetch_contract_details_for_conids(self, conid_list):
+        """
+        Given a list of conIds, fetch contract details and return mappings:
+        {conId: strike}, {conId: expiry}
+        """
+        for conid in set(conid_list):
+            contract = Contract()
+            contract.conId = conid
+            self.contract_details_event.clear()
+            self.reqContractDetails(self.get_new_reqid(), contract)
+            self.contract_details_event.wait(2)  # Wait for IBKR response
+            # contractDetails callback will update self.conid_to_strike and self.conid_to_expiry
+        # Return copies of the mappings
+        return dict(self.conid_to_strike), dict(self.conid_to_expiry)

@@ -390,6 +390,47 @@ def run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger
         time.sleep(1)
     print("Post-open retry loops concluded (either market close reached or no pending issues).", flush=True)
 
+def format_existing_orders(existing_orders, conid_to_strike, conid_to_expiry):
+    lines = []
+    if not existing_orders:
+        return "No existing open orders found."
+    lines.append("=== Existing Open Orders (from IBKR/TWS) ===")
+    
+    sortable_orders = []
+    for order in existing_orders:
+        leg_conids = order.get('leg_conIds', [])
+        strikes = [conid_to_strike.get(conid, 'N/A') for conid in leg_conids]
+        # Ensure LC is min(strikes), SC is max(strikes)
+        if all(isinstance(s, (float, int)) or str(s).replace('.','',1).isdigit() for s in strikes):
+            strikes = [float(s) for s in strikes]
+            lc_strike = min(strikes)
+            sc_strike = max(strikes)
+        else:
+            lc_strike = strikes[0] if strikes else 'N/A'
+            sc_strike = strikes[1] if len(strikes) > 1 else 'N/A'
+        expiry = conid_to_expiry.get(leg_conids[0], 'N/A') if leg_conids else 'N/A'
+        sortable_orders.append({
+            "orderId": order.get('orderId'),
+            "symbol": order.get('symbol'),
+            "order_type": order.get('order_type'),
+            "expiry": expiry,
+            "trigger_price": order.get('trigger_price'),
+            "lc_strike": lc_strike,
+            "sc_strike": sc_strike
+        })
+    
+    # Sort by LC strike
+    sortable_orders.sort(key=lambda x: float(x["lc_strike"]) if isinstance(x["lc_strike"], (float, int)) or str(x["lc_strike"]).replace('.','',1).isdigit() else float('inf'))
+
+    for o in sortable_orders:
+        lines.append(
+            f"Order ID: {o['orderId']} | Symbol: {o['symbol']} | "
+            f"Type: {o['order_type']} | Expiry: {o['expiry']} | "
+            f"Trigger: {o['trigger_price']} | LC: {o['lc_strike']} | SC: {o['sc_strike']}"
+        )
+    lines.append("===============================")
+    return "\n".join(lines)
+
 def main_loop():
     parser = argparse.ArgumentParser(description="Automated SPX Bull Spread Order Management for IBKR.")
     parser.add_argument(
@@ -493,13 +534,6 @@ def main_loop():
 
             # Display all submitted and existing open orders
 
-            print("\n=== Existing Open Orders (from IBKR/TWS) ===")
-            if existing_orders:
-                for order in existing_orders:
-                    print(f"Order ID: {order.get('orderId')} | Symbol: {order.get('symbol')} | Type: {order.get('order_type')} | Trigger: {order.get('trigger_price')} | LC: {order.get('leg_conIds', [''])[0]} | SC: {order.get('leg_conIds', ['',''])[1]}")
-            else:
-                print("No existing open orders found.")
-
             print("\n=== Successfully Submitted Orders (this session) ===")
             if managed_orders:
                 for mo in managed_orders:
@@ -508,6 +542,17 @@ def main_loop():
                 print("========================\n")
             else:
                 print("No orders have been submitted.\n")
+
+            # Gather all conIds from existing orders
+            all_conids = []
+            for order in existing_orders:
+                all_conids.extend(order.get('leg_conIds', []))
+
+            # Fetch contract details and build mappings
+            conid_to_strike, conid_to_expiry = app.fetch_contract_details_for_conids(all_conids)
+
+            # Display nicely
+            print(format_existing_orders(existing_orders, conid_to_strike, conid_to_expiry))
 
             # Post-place error retry loop
             run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger_conid, app.market_close_time, app.tz, existing_orders)
