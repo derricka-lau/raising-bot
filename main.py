@@ -544,7 +544,9 @@ def main_loop():
                 print("No orders have been submitted.\n")
 
             # Gather all conIds from existing orders
+            # Gather all conIds from existing orders
             all_conids = []
+            existing_orders = fetch_existing_orders(app)
             for order in existing_orders:
                 all_conids.extend(order.get('leg_conIds', []))
 
@@ -556,6 +558,12 @@ def main_loop():
 
             # Post-place error retry loop
             run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger_conid, app.market_close_time, app.tz, existing_orders)
+
+            # Gather all conIds from existing orders
+            all_conids = []
+            existing_orders = fetch_existing_orders(app)
+            for order in existing_orders:
+                all_conids.extend(order.get('leg_conIds', []))
 
             # If the script completes normally, we can break the loop.
             print("Script has completed its automated tasks.", flush=True)
