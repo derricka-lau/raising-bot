@@ -138,6 +138,7 @@ def process_managed_orders(app, managed_orders, underlying_symbol):
 def fetch_existing_orders(app: IBKRApp) -> List[dict]:
     """Fetches only the currently open orders."""
     print("Requesting open orders...", flush=True)
+    app.open_orders = []  # <-- Clear the list before fetching!
     ok = request_with_retry(lambda: app.reqAllOpenOrders(), app.open_orders_event, attempts=3, wait_secs=8, desc="Open orders")
     if not ok:
         print("Failed to fetch open orders after retries. Continuing with empty set.", flush=True)
@@ -543,27 +544,24 @@ def main_loop():
             else:
                 print("No orders have been submitted.\n")
 
-            # Gather all conIds from existing orders
-            # Gather all conIds from existing orders
+            # Gather all conIds from existing orders and display them
             all_conids = []
             existing_orders = fetch_existing_orders(app)
             for order in existing_orders:
                 all_conids.extend(order.get('leg_conIds', []))
-
-            # Fetch contract details and build mappings
             conid_to_strike, conid_to_expiry = app.fetch_contract_details_for_conids(all_conids)
-
-            # Display nicely
             print(format_existing_orders(existing_orders, conid_to_strike, conid_to_expiry))
 
             # Post-place error retry loop
             run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger_conid, app.market_close_time, app.tz, existing_orders)
 
-            # Gather all conIds from existing orders
+            # Gather all conIds from existing orders and display them
             all_conids = []
             existing_orders = fetch_existing_orders(app)
             for order in existing_orders:
                 all_conids.extend(order.get('leg_conIds', []))
+            conid_to_strike, conid_to_expiry = app.fetch_contract_details_for_conids(all_conids)
+            print(format_existing_orders(existing_orders, conid_to_strike, conid_to_expiry))
 
             # If the script completes normally, we can break the loop.
             print("Script has completed its automated tasks.", flush=True)
