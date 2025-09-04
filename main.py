@@ -491,15 +491,23 @@ def main_loop():
             process_managed_orders(app, managed_orders, UNDERLYING_SYMBOL)
             print("--- Post-open signal checks complete. Monitoring for errors. ---", flush=True)
 
-            # Display only successfully submitted orders
+            # Display all submitted and existing open orders
+
+            print("\n=== Existing Open Orders (from IBKR/TWS) ===")
+            if existing_orders:
+                for order in existing_orders:
+                    print(f"Order ID: {order.get('orderId')} | Symbol: {order.get('symbol')} | Type: {order.get('order_type')} | Trigger: {order.get('trigger_price')} | LC: {order.get('leg_conIds', [''])[0]} | SC: {order.get('leg_conIds', ['',''])[1]}")
+            else:
+                print("No existing open orders found.")
+
+            print("\n=== Successfully Submitted Orders (this session) ===")
             if managed_orders:
-                print("\n=== Successfully Submitted Orders ===")
                 for mo in managed_orders:
                     if mo.id not in app.error_order_ids:
                         print(f"Order ID: {mo.id} | Trigger: {mo.trigger} | LC Strike: {mo.lc_strike} | SC Strike: {mo.sc_strike} | Type: {mo.order_obj.orderType}")
                 print("========================\n")
             else:
-                print("\nNo orders have been submitted.\n")
+                print("No orders have been submitted.\n")
 
             # Post-place error retry loop
             run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger_conid, app.market_close_time, app.tz, existing_orders)
