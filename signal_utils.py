@@ -126,19 +126,14 @@ def round_strike(strike):
 def parse_multi_signal_message(text):
     signals = []
     for match in re.finditer(MULTI_SIGNAL_REGEX, text):
-        
         try:
             expiry = match.group(1).replace('-', '')
             sc_str = round_strike(match.group(2))
             lc_str = round_strike(match.group(3))
             trigger_midpoint = (float(sc_str) + float(lc_str)) / 2.0
 
-            # Find @N (Set number) in the line, default to 1 if not found
-            line = match.group(0)
-            set_matches = re.findall(r'@(\d+)', line)
-            set_numbers = [int(s) for s in set_matches] if set_matches else [1]
-
-            for set_num in set_numbers:
+            set_num = int(match.group(4)) if match.group(4) else 1
+            for _ in range(set_num):
                 signals.append({
                     "expiry": expiry,
                     "sc_strike": sc_str,

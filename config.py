@@ -26,7 +26,7 @@ CONFIG_DEFAULTS = {
     "TELEGRAM_API_ID": "",
     "TELEGRAM_API_HASH": "",
     "TELEGRAM_CHANNEL": "",
-    "MULTI_SIGNAL_REGEX": r"到期日:\s*(\d{4}-\d{2}-\d{2})\s*SC:\s*([\d.]+)\s*LC:\s*([\d.]+)[^未觸發]*未觸發",
+    "MULTI_SIGNAL_REGEX": r"到期日:\s*(\d{4}-\d{2}-\d{2})\s*SC:\s*([\d.]+)\s*LC:\s*([\d.]+)(?:.*?@(\d+))?[^未觸發]*未觸發",
     "IBKR_HOST": '127.0.0.1',
     "IBKR_CLIENT_ID": 144,
     "UNDERLYING_SYMBOL": "SPX",
