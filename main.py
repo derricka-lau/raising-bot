@@ -522,15 +522,36 @@ def main_loop():
             print(f"Waiting until {wait_time_931.strftime('%H:%M:%S %Z')} to check for new signals...", flush=True)
             time.sleep(max(0, (wait_time_931 - datetime.now(app.tz)).total_seconds()))
 
-            print("--- 9:32:00 AM: Fetching new signals... ---", flush=True)
+            print("--- 9:32:00 AM: Fetching signals and removing initial ones... ---", flush=True)
             signals_932 = gather_signals(allow_manual_fallback=False)
-            if not signals_932:
-                print("No signals found at 9:32:00. If you need to manually enter any signal again, please stop and rerun the bot.", flush=True)
+
+            # Create a mutable copy of the 9:32 signals to safely remove items from.
+            new_signals_to_process = list(signals_932)
+
+            # For each signal that we processed initially...
+            for initial_signal in signals:
+                # ...try to find and remove one matching signal from the new list.
+                for i, signal_932 in enumerate(new_signals_to_process):
+                    # Check for a match based on core properties
+                    if (initial_signal.expiry == signal_932.expiry and
+                        initial_signal.lc_strike == signal_932.lc_strike and
+                        initial_signal.sc_strike == signal_932.sc_strike and
+                        initial_signal.trigger_price == signal_932.trigger_price):
+                        
+                        # Found a match, "pop" it from the list and stop searching for this initial_signal
+                        new_signals_to_process.pop(i)
+                        break # Move to the next initial_signal
+
+            if not new_signals_to_process:
+                print("No genuinely new signals found at 9:32:00.", flush=True)
             else:
-                print(f"Found {len(signals_932)} signal(s) at 9:32:00.", flush=True)
-            process_and_stage_new_signals(app, signals_932, managed_orders, existing_orders, trigger_conid)
-            time.sleep(3)
-            process_managed_orders(app, managed_orders, UNDERLYING_SYMBOL)
+                print(f"Found {len(new_signals_to_process)} new signal(s) at 9:32:00. Processing...", flush=True)
+                existing_orders_932 = fetch_existing_orders(app)
+                process_and_stage_new_signals(app, new_signals_to_process, managed_orders, existing_orders_932, trigger_conid)
+                managed_orders.sort(key=lambda x: x.trigger)
+                time.sleep(3)
+                process_managed_orders(app, managed_orders, UNDERLYING_SYMBOL)
+
             print("--- Post-open signal checks complete. Monitoring for errors. ---", flush=True)
 
             # Display all submitted and existing open orders
