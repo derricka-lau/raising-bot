@@ -574,6 +574,7 @@ def main_loop():
             conid_to_strike, conid_to_expiry = app.fetch_contract_details_for_conids(all_conids)
             print(format_existing_orders(existing_orders, conid_to_strike, conid_to_expiry))
 
+            time.sleep(2)
             # Post-place error retry loop
             run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger_conid, app.market_close_time, app.tz, existing_orders)
 
