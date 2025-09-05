@@ -295,6 +295,7 @@ def fetch_open_price_with_retry(app: IBKRApp, symbol: str, attempts: int = 5, wa
 
 def run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger_conid, market_close_time, tz, existing_orders):
     last_status_print = 0  # <-- Add this line!
+    print("Entering post-open retry loop for error orders and failed conId signals...", flush=True)
     while datetime.now(tz) < market_close_time and (app.error_order_ids or failed_conid_signals):
         live_price = app.current_spx_price
 
