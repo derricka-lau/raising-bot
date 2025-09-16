@@ -216,11 +216,19 @@ def build_staged_order(signal: Signal, trigger_conid: int) -> Order:
         o.lmtPrice = float(price_cap)
 
         if o.orderType == "PEG MID":
-            # PEG MID also needs the offset in auxPrice
+            # --- CORRECTED LOGIC: Use REL for robust combo pegging ---
+            # This is the standard API method to peg to midpoint with an offset and a price cap for combos.
+            o.orderType = "REL" # Change order type to Relative
+
+            # For REL, the offset is set in auxPrice, and the cap is in lmtPrice.
+            offset_val = 0.0
             if signal.snapmid_offset is not None:
-                o.auxPrice = float(signal.snapmid_offset)
+                offset_val = float(signal.snapmid_offset)
             else:
-                o.auxPrice = float(SNAPMID_OFFSET)
+                offset_val = float(SNAPMID_OFFSET)
+            
+            # A positive offset makes a BUY order more aggressive (pays more).
+            o.auxPrice = abs(offset_val)
 
     elif o.orderType == "STP":
         if signal.stop_price is None: raise ValueError("STP order requires stop_price")
