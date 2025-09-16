@@ -54,7 +54,8 @@ socketio = SocketIO(app, cors_allowed_origins="*")
 CONFIG_FIELDS = [
     "IBKR_ACCOUNT", "IBKR_PORT", "TELEGRAM_API_ID", "TELEGRAM_API_HASH", "TELEGRAM_CHANNEL",
     "IBKR_HOST", "IBKR_CLIENT_ID", "UNDERLYING_SYMBOL", "DEFAULT_ORDER_TYPE", "SNAPMID_OFFSET",
-    "DEFAULT_LIMIT_PRICE", "DEFAULT_STOP_PRICE", "WAIT_AFTER_OPEN_SECONDS"
+    "DEFAULT_LIMIT_PRICE", "DEFAULT_STOP_PRICE", "WAIT_AFTER_OPEN_SECONDS",
+    "LMT_PRICE_FOR_SPREAD_30", "LMT_PRICE_FOR_SPREAD_35"
 ]
 
 CONFIG_DEFAULTS = {
@@ -69,10 +70,12 @@ CONFIG_DEFAULTS = {
     "DEFAULT_ORDER_TYPE": "SNAP MID",
     "SNAPMID_OFFSET": "0.1",
     "WAIT_AFTER_OPEN_SECONDS": "3",
+    "LMT_PRICE_FOR_SPREAD_30": "",
+    "LMT_PRICE_FOR_SPREAD_35": "",
 }
 
 VALID_ORDER_TYPES = [
-    "SNAP MID", "LMT", "MKT", "STP", "STP LMT", "REL", "TRAIL", "TRAIL LIMIT"
+    "SNAP MID", "LMT", "MKT", "STP", "STP LMT", "REL", "TRAIL", "TRAIL LIMIT", "PEG MID"
 ]
 
 # --- UPDATE CONFIG LOADING LOGIC ---
@@ -191,6 +194,8 @@ def config():
         if invalid:
             return jsonify({"error": f"Invalid field(s): {', '.join(invalid)}"}), 400
 
+        # --- Start of Corrected Validation Logic ---
+
         # Validate required fields
         required_fields = [
             "IBKR_ACCOUNT", "IBKR_PORT", "IBKR_HOST", "IBKR_CLIENT_ID", "UNDERLYING_SYMBOL", "DEFAULT_ORDER_TYPE", "SNAPMID_OFFSET"
@@ -204,37 +209,41 @@ def config():
         if order_type and order_type not in VALID_ORDER_TYPES:
             return jsonify({"error": f"Invalid DEFAULT_ORDER_TYPE: {order_type}. Allowed: {', '.join(VALID_ORDER_TYPES)}"}), 400
 
-        # Require limit/stop price for certain order types
-        if order_type == "LMT" and not str(data.get("DEFAULT_LIMIT_PRICE", "")).strip():
-            return jsonify({"error": "Limit price required for LMT order type"}), 400
+        # Conditional validation based on order type
         if order_type == "STP" and not str(data.get("DEFAULT_STOP_PRICE", "")).strip():
             return jsonify({"error": "Stop price required for STP order type"}), 400
+        
         if order_type == "STP LMT":
             if not str(data.get("DEFAULT_LIMIT_PRICE", "")).strip() or not str(data.get("DEFAULT_STOP_PRICE", "")).strip():
                 return jsonify({"error": "Both limit and stop price required for STP LMT order type"}), 400
-        # Add similar checks for TRAIL/TRAIL LIMIT if you support them
+        
+        if order_type in ("LMT", "PEG MID"):
+            has_default_lmt = str(data.get("DEFAULT_LIMIT_PRICE", "")).strip()
+            has_spread_30_lmt = str(data.get("LMT_PRICE_FOR_SPREAD_30", "")).strip()
+            has_spread_35_lmt = str(data.get("LMT_PRICE_FOR_SPREAD_35", "")).strip()
+            if not any([has_default_lmt, has_spread_30_lmt, has_spread_35_lmt]):
+                return jsonify({"error": f"For {order_type} orders, you must provide a Default Price Cap or at least one spread-specific price cap."}), 400
 
         # Additional validation for numeric fields
         def is_float(val):
             try:
                 float(val)
                 return True
-            except Exception:
+            except (ValueError, TypeError):
                 return False
 
-        def is_int(val):
-            try:
-                int(val)
-                return True
-            except Exception:
-                return False
+        if str(data.get("DEFAULT_LIMIT_PRICE", "")).strip() and not is_float(data.get("DEFAULT_LIMIT_PRICE")):
+            return jsonify({"error": "Default Limit Price must be a number."}), 400
+        if str(data.get("DEFAULT_STOP_PRICE", "")).strip() and not is_float(data.get("DEFAULT_STOP_PRICE")):
+            return jsonify({"error": "Default Stop Price must be a number."}), 400
+        if str(data.get("SNAPMID_OFFSET", "")).strip() and not is_float(data.get("SNAPMID_OFFSET")):
+            return jsonify({"error": "Midpoint Offset must be a number."}), 400
+        if str(data.get("LMT_PRICE_FOR_SPREAD_30", "")).strip() and not is_float(data.get("LMT_PRICE_FOR_SPREAD_30")):
+            return jsonify({"error": "LMT Price for 30-wide Spread must be a number."}), 400
+        if str(data.get("LMT_PRICE_FOR_SPREAD_35", "")).strip() and not is_float(data.get("LMT_PRICE_FOR_SPREAD_35")):
+            return jsonify({"error": "LMT Price for 35-wide Spread must be a number."}), 400
 
-        if order_type == "LMT" and not is_float(data.get("DEFAULT_LIMIT_PRICE", "")):
-            return jsonify({"error": "Limit price must be a number for LMT order type"}), 400
-        if order_type == "STP" and not is_float(data.get("DEFAULT_STOP_PRICE", "")):
-            return jsonify({"error": "Stop price must be a number for STP order type"}), 400
-        if order_type == "SNAP MID" and not is_float(data.get("SNAPMID_OFFSET", "")):
-            return jsonify({"error": "SnapMid Offset must be a number for SNAP MID order type"}), 400
+        # --- End of Corrected Validation Logic ---
 
         try:
             merged = load_config()

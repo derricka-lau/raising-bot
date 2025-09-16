@@ -35,6 +35,8 @@ CONFIG_DEFAULTS = {
     "DEFAULT_STOP_PRICE": None,
     "SNAPMID_OFFSET": 0.1,
     "WAIT_AFTER_OPEN_SECONDS": 3,  # Default wait time after market open
+    "LMT_PRICE_FOR_SPREAD_30": 19,
+    "LMT_PRICE_FOR_SPREAD_35": 23
 }
 
 config_data = CONFIG_DEFAULTS.copy()
@@ -59,3 +61,5 @@ SNAPMID_OFFSET = float(config_data.get("SNAPMID_OFFSET"))
 DEFAULT_LIMIT_PRICE = float(config_data.get("DEFAULT_LIMIT_PRICE")) if config_data.get("DEFAULT_LIMIT_PRICE") not in (None, "", "None") else None
 DEFAULT_STOP_PRICE = float(config_data.get("DEFAULT_STOP_PRICE")) if config_data.get("DEFAULT_STOP_PRICE") not in (None, "", "None") else None
 WAIT_AFTER_OPEN_SECONDS = int(config_data.get("WAIT_AFTER_OPEN_SECONDS", 3))
+LMT_PRICE_FOR_SPREAD_30 = float(config_data.get("LMT_PRICE_FOR_SPREAD_30")) if config_data.get("LMT_PRICE_FOR_SPREAD_30") not in (None, "", "None") else None
+LMT_PRICE_FOR_SPREAD_35 = float(config_data.get("LMT_PRICE_FOR_SPREAD_35")) if config_data.get("LMT_PRICE_FOR_SPREAD_35") not in (None, "", "None") else None

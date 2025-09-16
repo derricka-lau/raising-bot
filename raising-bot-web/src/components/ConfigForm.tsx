@@ -2,7 +2,7 @@ import React from "react";
 import { Box, Typography, TextField, Button, Stack, CircularProgress, MenuItem } from "@mui/material";
 
 const ORDER_TYPES = [
-  "SNAP MID", "LMT", "MKT"
+  "SNAP MID", "LMT", "MKT", "PEG MID"
 ];
 
 const CONFIG_FIELDS = [
@@ -13,8 +13,10 @@ const CONFIG_FIELDS = [
   { key: "TELEGRAM_CHANNEL", label: "Telegram Channel", required: false, helper: "Optional, e.g. @RaisingCycle_Notification_bot" },
   { key: "IBKR_HOST", label: "IBKR Host", required: true, helper: "Usually '127.0.0.1'" },
   { key: "IBKR_CLIENT_ID", label: "IBKR Client ID", required: true, helper: "Just put in a random number" },
-  { key: "SNAPMID_OFFSET", label: "SnapMid Offset", required: true, helper: "Offset for SnapMid orders" },
+  { key: "SNAPMID_OFFSET", label: "Midpoint Offset", required: true, helper: "Offset for SNAP MID and PEG MID orders" },
   { key: "DEFAULT_ORDER_TYPE", label: "Default Order Type", required: true, helper: "Choose a valid IBKR order type" },
+  { key: "LMT_PRICE_FOR_SPREAD_30", label: "Price Cap for 30-wide Spreads (LMT/PEG MID)", required: false, helper: "Optional. Used for both LMT and PEG MID." },
+  { key: "LMT_PRICE_FOR_SPREAD_35", label: "Price Cap for 35-wide Spreads (LMT/PEG MID)", required: false, helper: "Optional. Used for both LMT and PEG MID." },
   { key: "WAIT_AFTER_OPEN_SECONDS", label: "Wait After Open (seconds)", required: false, helper: "Seconds to wait after market open before fetching SPX open price. Increase if there is latency or low liquidity." }
 ];
 
@@ -54,7 +56,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ config, onFieldChange, onSave, 
                 ))}
               </TextField>
             ) : key === "SNAPMID_OFFSET" ? (
-              orderType === "SNAP MID" && (
+              (orderType === "SNAP MID" || orderType === "PEG MID") && (
                 <TextField
                   key={key}
                   label={label}
@@ -64,6 +66,20 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ config, onFieldChange, onSave, 
                   onChange={(e) => onFieldChange(key, e.target.value)}
                   variant="outlined"
                   fullWidth
+                />
+              )
+            ) : key === "LMT_PRICE_FOR_SPREAD_30" || key === "LMT_PRICE_FOR_SPREAD_35" ? (
+              (orderType === "LMT" || orderType === "PEG MID") && (
+                <TextField
+                  key={key}
+                  label={label}
+                  value={config[key] || ""}
+                  required={required}
+                  helperText={helper}
+                  onChange={(e) => onFieldChange(key, e.target.value)}
+                  variant="outlined"
+                  fullWidth
+                  type="number"
                 />
               )
             ) : key === "WAIT_AFTER_OPEN_SECONDS" ? (
@@ -107,15 +123,15 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ config, onFieldChange, onSave, 
             )
           )}
           {/* Conditional fields for limit/stop price */}
-          {orderType === "LMT" && (
+          {(orderType === "LMT" || orderType === "PEG MID") && !config.LMT_PRICE_FOR_SPREAD_30 && !config.LMT_PRICE_FOR_SPREAD_35 && (
             <TextField
-              label="Default Limit Price"
+              label="Default Price Cap (LMT/PEG MID)"
               value={config.DEFAULT_LIMIT_PRICE || ""}
               required
               onChange={(e) => onFieldChange("DEFAULT_LIMIT_PRICE", e.target.value)}
               variant="outlined"
               fullWidth
-              helperText="Required for LMT orders"
+              helperText="Required if spread-specific caps are not set."
             />
           )}
           <Box>

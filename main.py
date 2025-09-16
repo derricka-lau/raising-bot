@@ -14,7 +14,8 @@ from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
 from config import (IBKR_HOST, IBKR_PORT, IBKR_CLIENT_ID, 
-                    UNDERLYING_SYMBOL, IBKR_ACCOUNT, SNAPMID_OFFSET, WAIT_AFTER_OPEN_SECONDS)
+                    UNDERLYING_SYMBOL, IBKR_ACCOUNT, SNAPMID_OFFSET, WAIT_AFTER_OPEN_SECONDS,
+                    LMT_PRICE_FOR_SPREAD_30, LMT_PRICE_FOR_SPREAD_35, DEFAULT_LIMIT_PRICE)
 from signal_utils import (Signal, gather_signals, get_signal_hash)
 from ibkr_app import IBKRApp
 
@@ -198,9 +199,29 @@ def build_staged_order(signal: Signal, trigger_conid: int) -> Order:
     o.orderType = signal.order_type
     o.account = IBKR_ACCOUNT
 
-    if o.orderType == "LMT":
-        if signal.lmt_price is None: raise ValueError("LMT order requires lmt_price")
-        o.lmtPrice = float(signal.lmt_price)
+    if o.orderType == "LMT" or o.orderType == "PEG MID":
+        spread_width = signal.sc_strike - signal.lc_strike
+        price_cap = None
+        if spread_width == 30 and LMT_PRICE_FOR_SPREAD_30 is not None:
+            price_cap = LMT_PRICE_FOR_SPREAD_30
+        elif spread_width == 35 and LMT_PRICE_FOR_SPREAD_35 is not None:
+            price_cap = LMT_PRICE_FOR_SPREAD_35
+        else:
+            # Use signal-specific price first, then fall back to the global default
+            price_cap = signal.lmt_price if signal.lmt_price is not None else DEFAULT_LIMIT_PRICE
+
+        if price_cap is None:
+            raise ValueError(f"{o.orderType} order requires a price cap. None found for spread width {spread_width}.")
+        
+        o.lmtPrice = float(price_cap)
+
+        if o.orderType == "PEG MID":
+            # PEG MID also needs the offset in auxPrice
+            if signal.snapmid_offset is not None:
+                o.auxPrice = float(signal.snapmid_offset)
+            else:
+                o.auxPrice = float(SNAPMID_OFFSET)
+
     elif o.orderType == "STP":
         if signal.stop_price is None: raise ValueError("STP order requires stop_price")
         o.auxPrice = float(signal.stop_price)
