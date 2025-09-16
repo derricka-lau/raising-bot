@@ -242,6 +242,13 @@ def build_staged_order(signal: Signal, trigger_conid: int) -> Order:
             o.auxPrice = float(signal.snapmid_offset)
         else:
             o.auxPrice = float(SNAPMID_OFFSET)
+    elif o.orderType == "SNAP MKT":
+        # For a BUY order, this creates a LMT order at Ask - Offset.
+        # A positive offset seeks price improvement. An offset of 0 behaves like a MKT order.
+        if signal.snapmid_offset is not None:
+            o.auxPrice = abs(float(signal.snapmid_offset))
+        else:
+            o.auxPrice = abs(float(SNAPMID_OFFSET))
 
     cond = Create(OrderCondition.Price)
     cond.conId = int(trigger_conid)

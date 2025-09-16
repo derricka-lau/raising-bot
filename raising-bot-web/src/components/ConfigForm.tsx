@@ -2,7 +2,7 @@ import React from "react";
 import { Box, Typography, TextField, Button, Stack, CircularProgress, MenuItem } from "@mui/material";
 
 const ORDER_TYPES = [
-  "SNAP MID", "LMT", "MKT", "PEG MID"
+  "SNAP MID", "SNAP MKT", "LMT", "MKT", "PEG MID"
 ];
 
 const CONFIG_FIELDS = [
@@ -56,7 +56,7 @@ const ConfigForm: React.FC<ConfigFormProps> = ({ config, onFieldChange, onSave, 
                 ))}
               </TextField>
             ) : key === "SNAPMID_OFFSET" ? (
-              (orderType === "SNAP MID" || orderType === "PEG MID") && (
+              (orderType === "SNAP MID" || orderType === "PEG MID" || orderType === "SNAP MKT") && (
                 <TextField
                   key={key}
                   label={label}
