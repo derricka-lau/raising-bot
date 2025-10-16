@@ -106,6 +106,7 @@ class IBKRApp(EWrapper, EClient):
         contract.strike = float(strike)
         contract.right = right
         contract.multiplier = "100"
+        contract.tradingClass = "SPXW" # <-- ADD THIS LINE
         self.lastConId = None
         self.contract_details_event.clear()
         self.reqContractDetails(11, contract)  # <-- Use a fixed reqId here
