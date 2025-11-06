@@ -6,11 +6,11 @@ Comprehensive test coverage for the RaisingBot automated trading system.
 
 | Category | Test File | Test Cases | Purpose |
 |----------|-----------|------------|---------|
-| **Thread Safety** | `test_ibkr_app.py` | 10 | Validates thread-safe contract details fetching |
-| **Business Logic** | `test_main.py` | 15 | Tests order processing, duplicate detection, retry logic |
-| **Signal Parsing** | `test_signal_utils.py` | 8 | Validates Telegram message parsing and conversion |
-| **Integration** | `test_integration.py` | 8 | End-to-end workflow validation |
-| **TOTAL** | 4 files | **41 tests** | Complete system validation |
+| **Thread Safety** | `test_ibkr_app.py` | 11 | Validates thread-safe contract details fetching |
+| **Business Logic** | `test_main.py` | 18 | Tests order processing, duplicate detection, retry logic |
+| **Signal Parsing** | `test_signal_utils.py` | 11 | Validates Telegram message parsing and conversion |
+| **Integration** | `test_integration.py` | 6 | End-to-end workflow validation |
+| **TOTAL** | 4 files | **46 tests** | Complete system validation |
 
 ## 🚀 Quick Start
 
@@ -43,7 +43,7 @@ python -m pytest tests/ --cov=. --cov-report=html
 
 ## 📝 Test Scenarios Covered
 
-### Thread Safety Tests (10 tests)
+### Thread Safety Tests (11 tests)
 
 **Why**: The bot fetches contract details from multiple threads simultaneously. Without proper locking, request IDs could collide, causing orders to fail or target wrong contracts.
 
@@ -57,8 +57,9 @@ python -m pytest tests/ --cov=. --cov-report=html
 8. **Test Contract Details Updates Mappings** - Verifies strike/expiry dictionaries updated
 9. **Test Fetch Contract Details for ConIDs** - Validates batch fetching with thread-safe IDs
 10. **Test Error Callback Signals Event** - Error handling doesn't block operations
+11. **Test Informational Codes Don't Interfere** - Informational messages handled gracefully
 
-### Business Logic Tests (15 tests)
+### Business Logic Tests (18 tests)
 
 **Why**: Core trading logic must be bulletproof. Duplicate detection prevents placing the same order twice. Retry logic ensures transient failures don't lose orders.
 
@@ -77,8 +78,11 @@ python -m pytest tests/ --cov=. --cov-report=html
 13. **Build Staged Order PEG MID Converted to REL** - Order type conversion
 14. **Retry Succeeds on Second Attempt** - Successful retry after failure
 15. **Retry Fails After Max Attempts** - Exception after exhausting retries
+16. **Retry Succeeds Immediately** - Successful operation on first attempt
+17. **Managed Order Creation** - ManagedOrder dataclass instantiation
+18. **IBKRApp Initialization** - Thread-safe lock validation
 
-### Signal Parsing Tests (8 tests)
+### Signal Parsing Tests (11 tests)
 
 **Why**: Signal parsing extracts trade parameters from Telegram messages. Incorrect parsing could result in wrong strikes, wrong expiry, or wrong trigger prices.
 
@@ -89,9 +93,12 @@ python -m pytest tests/ --cov=. --cov-report=html
 5. **Parse Multi-Signal Message With Trigger** - Explicit trigger price parsing
 6. **Parse Multi-Signal Message Invalid** - Handles invalid messages gracefully
 7. **Parse Multi-Signal Message Rounds Strikes** - Strike rounding to nearest $5
-8. **To Signal Conversion** - Dictionary to Signal object conversion
+8. **To Signal Basic** - Dictionary to Signal object conversion
+9. **To Signal With Optional Fields** - Conversion with all optional parameters
+10. **Get Signal Hash** - SHA256 hash generation from signal text
+11. **Round Strike** - Strike price rounding validation
 
-### Integration Tests (8 tests)
+### Integration Tests (6 tests)
 
 **Why**: Individual units may work correctly but fail when combined. Integration tests validate the complete workflow from signal to staged order.
 
@@ -101,8 +108,6 @@ python -m pytest tests/ --cov=. --cov-report=html
 4. **Process Signal With ConID Error** - Graceful failure handling
 5. **Complete Order Workflow** - Full workflow validation with mocks
 6. **Partial Failure Recovery** - One signal failure doesn't block others
-7. **Error Recovery Mechanisms** - Validates error handling doesn't crash system
-8. **Order Staging and Transmission** - Staged orders ready for transmission
 
 ## 🎯 Critical Tests That Must Pass
 
@@ -190,6 +195,6 @@ If tests fail unexpectedly:
 
 ---
 
-**Status**: All 41 tests passing ✅  
+**Status**: All 46 tests passing ✅  
 **Last Updated**: November 2025  
 **Python Version**: 3.11+
