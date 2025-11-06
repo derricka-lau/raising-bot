@@ -10,8 +10,24 @@ permissions:
   contents: write
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+      - name: Run tests
+        run: python -m pytest tests/ -v
+
   build-mac:
     runs-on: macos-latest
+    needs: test
     steps:
       - uses: actions/checkout@v4
       - name: List files
@@ -48,6 +64,7 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
+    needs: test
     steps:
       - uses: actions/checkout@v4
       - name: List files

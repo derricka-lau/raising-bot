@@ -11,30 +11,40 @@ class IBKRApp(EWrapper, EClient):
     # Define constants for request IDs
     REQID_HISTORICAL_OPEN = 99
     REQID_SPX_STREAM = 100
-    REQID_CONTRACT_DETAILS_IND = 10
-    REQID_CONTRACT_DETAILS_OPT = 11
+    # Removed REQID constants for contract details as they are now dynamic
 
     def __init__(self):
         EClient.__init__(self, self)
         self.nextOrderId = None
         self.underlying_open_price = None
         self.current_spx_price = None
-        self.lastConId = None
-        self.open_orders = []
+        
+        # --- NEW: Thread-safe request ID generation and result storage ---
         self.nextReqId = 1
-        # --- Add threading events for synchronization ---
+        self.req_id_lock = threading.Lock()
+        self.contract_details_results = {}
+        self.contract_details_events = {}
+        
+        # --- Threading events for synchronization ---
         self.connected_event = threading.Event()
         self.open_orders_event = threading.Event()
         self.historical_data_event = threading.Event()
-        self.contract_details_event = threading.Event()
         self.order_status_event = threading.Event()
+        
+        self.open_orders = []
         self.error_order_ids = []
         # --- Add these fields for countdown ---
         self.market_close_time = None
         self.tz = None
+        self.conid_to_strike = {}
+        self.conid_to_expiry = {}
 
-        self.conid_to_strike = {}   # <-- Add this line
-        self.conid_to_expiry = {}   # <-- Add this line
+    def get_new_reqid(self):
+        """Generates a new, unique, thread-safe request ID."""
+        with self.req_id_lock:
+            reqid = self.nextReqId
+            self.nextReqId += 1
+            return reqid
 
     def nextValidId(self, orderId: int):
         super().nextValidId(orderId)
@@ -49,6 +59,9 @@ class IBKRApp(EWrapper, EClient):
             return
         if errorCode == 202:
             print(f"Order cancellation confirmed for reqId {reqId}.", flush=True)
+        # For contract detail errors, signal the event to unblock the waiting thread
+        if reqId in self.contract_details_events:
+            self.contract_details_events[reqId].set()
         print(f"IBKR Log: reqId {reqId}, Code {errorCode} - {errorString}", flush=True)
 
     def tickPrice(self, reqId, tickType, price, attrib):
@@ -81,50 +94,46 @@ class IBKRApp(EWrapper, EClient):
             print("Historical data request finished but no data was received.", flush=True)
             self.historical_data_event.set() # Unblock the wait even if there's no data
 
-    def get_spx_index_conid(self):
-        """Fetches the contract ID for the SPX index."""
-        contract = Contract()
-        contract.symbol = "SPX"
-        contract.secType = "IND"
-        contract.exchange = "CBOE"
-        contract.currency = "USD"
-        self.lastConId = None
-        self.contract_details_event.clear()
-        self.reqContractDetails(10, contract)
-        self.contract_details_event.wait(5) # Wait up to 5 seconds
-        if not self.lastConId:
-            raise Exception("Failed to get SPX Index conId.")
-        return self.lastConId
+    def get_contract_details(self, contract: Contract, timeout=7) -> int:
+        """
+        Fetches contract details for a given contract object in a thread-safe manner.
+        Returns the conId.
+        """
+        req_id = self.get_new_reqid()
+        self.contract_details_events[req_id] = threading.Event()
+        self.contract_details_results[req_id] = None
 
-    def get_spx_option_conid(self, expiry, strike, right):
-        contract = Contract()
-        contract.symbol = "SPX"
-        contract.secType = "OPT"
-        contract.exchange = "SMART"
-        contract.currency = "USD"
-        contract.lastTradeDateOrContractMonth = expiry
-        contract.strike = float(strike)
-        contract.right = right
-        contract.multiplier = "100"
-        contract.tradingClass = "SPXW" # <-- ADD THIS LINE
-        self.lastConId = None
-        self.contract_details_event.clear()
-        self.reqContractDetails(11, contract)  # <-- Use a fixed reqId here
-        self.contract_details_event.wait(5) # Wait up to 5 seconds
-        if not self.lastConId:
-            raise Exception(f"Failed to get option conId for {strike} {right}.")
-        return self.lastConId
+        print(f"Requesting contract details with reqId {req_id}...", flush=True)
+        self.reqContractDetails(req_id, contract)
+
+        event_triggered = self.contract_details_events[req_id].wait(timeout)
+
+        details = self.contract_details_results.pop(req_id, None)
+        del self.contract_details_events[req_id]
+
+        if not event_triggered:
+            raise Exception(f"Request for {contract.symbol} details timed out.")
+        if not details:
+            raise Exception(f"Failed to get contract details for {contract.symbol} {getattr(contract, 'strike', '')} {getattr(contract, 'right', '')}. No details found.")
+        
+        return details.contract.conId
 
     def contractDetails(self, reqId, contractDetails):
         super().contractDetails(reqId, contractDetails)
-        self.lastConId = contractDetails.contract.conId
-        self.conid_to_strike[self.lastConId] = contractDetails.contract.strike
-        self.conid_to_expiry[self.lastConId] = contractDetails.contract.lastTradeDateOrContractMonth
-        self.contract_details_event.set()
+        # If this reqId is one we are waiting for, store the result
+        if reqId in self.contract_details_results:
+            self.contract_details_results[reqId] = contractDetails
+        
+        # Also update our general-purpose mappings
+        conId = contractDetails.contract.conId
+        self.conid_to_strike[conId] = contractDetails.contract.strike
+        self.conid_to_expiry[conId] = contractDetails.contract.lastTradeDateOrContractMonth
 
     def contractDetailsEnd(self, reqId: int):
         super().contractDetailsEnd(reqId)
-        self.contract_details_event.set() # Also signal on end in case no details found
+        # If this reqId is one we are waiting for, signal its event to unblock it
+        if reqId in self.contract_details_events:
+            self.contract_details_events[reqId].set()
 
     def openOrder(self, orderId, contract, order, orderState):
         super().openOrder(orderId, contract, order, orderState)
@@ -159,22 +168,20 @@ class IBKRApp(EWrapper, EClient):
             if orderId not in self.error_order_ids:
                 self.error_order_ids.append(orderId)
 
-    def get_new_reqid(self):
-        reqid = self.nextReqId
-        self.nextReqId += 1
-        return reqid
-
     def fetch_contract_details_for_conids(self, conid_list):
         """
-        Given a list of conIds, fetch contract details and return mappings:
-        {conId: strike}, {conId: expiry}
+        Given a list of conIds, fetch contract details and update mappings.
         """
         for conid in set(conid_list):
+            if conid in self.conid_to_strike:  # Skip if we already have it
+                continue
             contract = Contract()
             contract.conId = conid
-            self.contract_details_event.clear()
-            self.reqContractDetails(self.get_new_reqid(), contract)
-            self.contract_details_event.wait(2)  # Wait for IBKR response
-            # contractDetails callback will update self.conid_to_strike and self.conid_to_expiry
+            try:
+                # This call will populate the conid_to_strike/expiry maps via the callback
+                self.get_contract_details(contract)
+            except Exception as e:
+                print(f"Could not fetch details for conId {conid}: {e}", flush=True)
+        
         # Return copies of the mappings
         return dict(self.conid_to_strike), dict(self.conid_to_expiry)

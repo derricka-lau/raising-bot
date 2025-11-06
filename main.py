@@ -149,10 +149,16 @@ def fetch_existing_orders(app: IBKRApp) -> List[dict]:
     return open_orders
 
 def get_trigger_conid_with_retry(app: IBKRApp, attempts: int = 3) -> Optional[int]:
+    """Fetches the SPX index contract ID with retry logic."""
     trigger_conid = None
     for i in range(1, attempts + 1):
         try:
-            trigger_conid = app.get_spx_index_conid()
+            spx_contract = Contract()
+            spx_contract.symbol = "SPX"
+            spx_contract.secType = "IND"
+            spx_contract.exchange = "CBOE"
+            spx_contract.currency = "USD"
+            trigger_conid = app.get_contract_details(spx_contract)
             print(f"Successfully fetched current SPX Index conId: {trigger_conid}", flush=True)
             return trigger_conid
         except Exception as e:
@@ -171,15 +177,31 @@ def start_spx_stream(app: IBKRApp, req_id_start: int = 100, tries: int = 3) -> N
             break
         print(f"SPX live price not yet available (attempt {i+1}/{tries}). Retrying stream request...", flush=True)
 
-def get_option_conid_with_retry(app: IBKRApp, expiry: str, strike: float, right: str, attempts: int = 3) -> int:
-    print(f"Fetching option conId for {expiry} {strike}{right}...", flush=True)
+def build_option_contract(expiry: str, strike: float, right: str) -> Contract:
+    """Helper function to build an SPX option contract."""
+    contract = Contract()
+    contract.symbol = "SPX"
+    contract.secType = "OPT"
+    contract.exchange = "SMART"
+    contract.currency = "USD"
+    contract.lastTradeDateOrContractMonth = expiry
+    contract.strike = float(strike)
+    contract.right = right
+    contract.multiplier = "100"
+    contract.tradingClass = "SPXW"
+    return contract
+
+def get_contract_conid_with_retry(app: IBKRApp, contract: Contract, attempts: int = 3) -> int:
+    """A generic retry wrapper for the new get_contract_details method."""
+    desc = f"{contract.symbol} {getattr(contract, 'strike', '')}{getattr(contract, 'right', '')}"
+    print(f"Fetching conId for {desc}...", flush=True)
     last_err: Optional[Exception] = None
     for i in range(1, attempts + 1):
         try:
-            return app.get_spx_option_conid(expiry, strike, right)
+            return app.get_contract_details(contract)
         except Exception as e:
             last_err = e
-            print(f"get_conid failed for {expiry} {strike}{right} (attempt {i}/{attempts}): {e}", flush=True)
+            print(f"get_contract_details failed for {desc} (attempt {i}/{attempts}): {e}", flush=True)
             time.sleep(0.5 * i)
     raise last_err or Exception("Unknown conid error")
 
@@ -283,8 +305,11 @@ def process_and_stage_new_signals(app: IBKRApp, signals: List[Signal], managed_o
     for s in signals:
         print(f"Processing signal: {json.dumps(s.__dict__)}", flush=True)
         try:
-            lc_conid = get_option_conid_with_retry(app, s.expiry, s.lc_strike, "C", attempts=3)
-            sc_conid = get_option_conid_with_retry(app, s.expiry, s.sc_strike, "C", attempts=3)
+            lc_contract = build_option_contract(s.expiry, s.lc_strike, "C")
+            sc_contract = build_option_contract(s.expiry, s.sc_strike, "C")
+            
+            lc_conid = get_contract_conid_with_retry(app, lc_contract, attempts=3)
+            sc_conid = get_contract_conid_with_retry(app, sc_contract, attempts=3)
             
             leg_ids = sorted([lc_conid, sc_conid])
             if is_duplicate_order(leg_ids, s.trigger_price, existing_orders, managed_orders, s):
@@ -391,15 +416,19 @@ def run_post_open_retry_loops(app, managed_orders, failed_conid_signals, trigger
                     if live_price >= signal.lc_strike:
                         try:
                             try:
-                                lc_conid = get_option_conid_with_retry(app, signal.expiry, signal.lc_strike, "C", attempts=3)
+                                lc_contract = build_option_contract(signal.expiry, signal.lc_strike, "C")
+                                lc_conid = get_contract_conid_with_retry(app, lc_contract, attempts=3)
                             except Exception as e:
                                 print(f"LC conId fetch failed for {signal.lc_strike}. Trying LC strike -5...", flush=True)
-                                lc_conid = get_option_conid_with_retry(app, signal.expiry, signal.lc_strike - 5, "C", attempts=3)
+                                lc_contract = build_option_contract(signal.expiry, signal.lc_strike - 5, "C")
+                                lc_conid = get_contract_conid_with_retry(app, lc_contract, attempts=3)
                             try:
-                                sc_conid = get_option_conid_with_retry(app, signal.expiry, signal.sc_strike, "C", attempts=3)
+                                sc_contract = build_option_contract(signal.expiry, signal.sc_strike, "C")
+                                sc_conid = get_contract_conid_with_retry(app, sc_contract, attempts=3)
                             except Exception as e:
                                 print(f"SC conId fetch failed for {signal.sc_strike}. Trying SC strike +5...", flush=True)
-                                sc_conid = get_option_conid_with_retry(app, signal.expiry, signal.sc_strike + 5, "C", attempts=3)
+                                sc_contract = build_option_contract(signal.expiry, signal.sc_strike + 5, "C")
+                                sc_conid = get_contract_conid_with_retry(app, sc_contract, attempts=3)
 
                             leg_ids = sorted([lc_conid, sc_conid])
                             # Check for duplicates before placing order
